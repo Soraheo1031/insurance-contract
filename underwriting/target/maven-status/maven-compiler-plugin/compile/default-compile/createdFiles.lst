@@ -1,0 +1,4 @@
+insurancecontract\AbstractEvent$1.class
+insurancecontract\config\kafka\KafkaProcessor.class
+insurancecontract\UnderwriterAssignned.class
+insurancecontract\AbstractEvent.class

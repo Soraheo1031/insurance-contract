@@ -1,0 +1,12 @@
+insurancecontract\PaymentController.class
+insurancecontract\PaymentApplication.class
+insurancecontract\PaymentCancelled.class
+insurancecontract\PaymentRepository.class
+insurancecontract\PaymentApproved.class
+insurancecontract\AbstractEvent.class
+insurancecontract\SubscriptionRefused.class
+insurancecontract\AbstractEvent$1.class
+insurancecontract\Payment.class
+insurancecontract\CancelRequested.class
+insurancecontract\config\kafka\KafkaProcessor.class
+insurancecontract\PolicyHandler.class
