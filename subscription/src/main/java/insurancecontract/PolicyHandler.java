@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.stream.annotation.StreamListener;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Service;
+import java.util.Optional;
 
 @Service
 public class PolicyHandler{
@@ -19,11 +20,17 @@ public class PolicyHandler{
 
         System.out.println("\n\n##### listener ConfirmCancel : " + paymentCancelled.toJson() + "\n\n");
 
-        // Sample Logic //
-        Subscription subscription = new Subscription();
-        subscriptionRepository.save(subscription);
-            
+        long subscriptionId = paymentCancelled.getSubscriptionId(); // 결제취소된 청약Id
+
+        Optional<Subscription> res = subscriptionRepository.findById(subscriptionId);
+        Subscription subscription = res.get();
+
+        subscription.setSubscriptionStatus("cancelled"); // 취소 상태
+
+        // DB Update
+        subscriptionRepository.save(subscription);   
     }
+
     @StreamListener(KafkaProcessor.INPUT)
     public void wheneverUnderwriterAssignned_ConfirmUnderwriterId(@Payload UnderwriterAssignned underwriterAssignned){
 
@@ -31,9 +38,15 @@ public class PolicyHandler{
 
         System.out.println("\n\n##### listener ConfirmUnderwriterId : " + underwriterAssignned.toJson() + "\n\n");
 
-        // Sample Logic //
-        Subscription subscription = new Subscription();
-        subscriptionRepository.save(subscription);
+        long subscriptionId = underwriterAssignned.getSubscriptionId(); // 심사자배정된 청약Id
+
+        Optional<Subscription> res = subscriptionRepository.findById(subscriptionId);
+        Subscription subscription = res.get();
+
+        subscription.setSubscriptionStatus("setUnderwriter"); // 심사자배정 상태
+
+        // DB Update
+        subscriptionRepository.save(subscription);  
             
     }
     @StreamListener(KafkaProcessor.INPUT)
@@ -43,10 +56,16 @@ public class PolicyHandler{
 
         System.out.println("\n\n##### listener ConfirmPaymentId : " + paymentApproved.toJson() + "\n\n");
 
-        // Sample Logic //
-        Subscription subscription = new Subscription();
-        subscriptionRepository.save(subscription);
-            
+        long subscriptionId = paymentApproved.getSubscriptionId(); // 결제승인된 청약Id
+
+        Optional<Subscription> res = subscriptionRepository.findById(subscriptionId);
+        Subscription subscription = res.get();
+
+        subscription.setPaymentId(paymentApproved.getPaymentId()); // 결제완료
+        subscription.setSubscriptionStatus("subscriptionPaid"); // 결제완료 상태
+
+        // DB Update
+        subscriptionRepository.save(subscription);   
     }
     @StreamListener(KafkaProcessor.INPUT)
     public void wheneverSubscriptionRefused_ConfirmRefuse(@Payload SubscriptionRefused subscriptionRefused){
@@ -55,15 +74,20 @@ public class PolicyHandler{
 
         System.out.println("\n\n##### listener ConfirmRefuse : " + subscriptionRefused.toJson() + "\n\n");
 
-        // Sample Logic //
-        Subscription subscription = new Subscription();
-        subscriptionRepository.save(subscription);
+        long subscriptionId = subscriptionRefused.getSubscriptionId(); // 심사거절된 청약Id
+
+        Optional<Subscription> res = subscriptionRepository.findById(subscriptionId);
+        Subscription subscription = res.get();
+
+        subscription.setSubscriptionStatus("refused"); // 심사거절 상태
+
+        // DB Update
+        subscriptionRepository.save(subscription);  
             
     }
 
 
     @StreamListener(KafkaProcessor.INPUT)
     public void whatever(@Payload String eventString){}
-
 
 }

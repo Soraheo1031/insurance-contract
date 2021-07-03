@@ -1,4 +1,12 @@
-insurancecontract\AbstractEvent$1.class
-insurancecontract\config\kafka\KafkaProcessor.class
+insurancecontract\Underwriting.class
+insurancecontract\SubscriptionContracted.class
 insurancecontract\UnderwriterAssignned.class
 insurancecontract\AbstractEvent.class
+insurancecontract\SubscriptionRefused.class
+insurancecontract\AbstractEvent$1.class
+insurancecontract\config\kafka\KafkaProcessor.class
+insurancecontract\UnderwritingController.class
+insurancecontract\UnderwritingRepository.class
+insurancecontract\PolicyHandler.class
+insurancecontract\SubscriptionCreated.class
+insurancecontract\UnderwritingApplication.class

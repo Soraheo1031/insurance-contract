@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.stream.annotation.StreamListener;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Service;
+import java.util.Optional;
 
 @Service
 public class PolicyHandler{
@@ -19,10 +20,17 @@ public class PolicyHandler{
 
         System.out.println("\n\n##### listener RegisterUnderwriting : " + subscriptionCreated.toJson() + "\n\n");
 
-        // Sample Logic //
-        Underwriting underwriting = new Underwriting();
-        underwritingRepository.save(underwriting);
-            
+        long subscriptionId = subscriptionCreated.getSubscriptionId(); // 심사자배정할 청약Id
+        long underwriterId = Long.valueOf("77001520"); // 심사자Id
+
+        Optional<Underwriting> res = underwritingRepository.findById(subscriptionId);
+        Underwriting underwriting = res.get();
+
+        underwriting.setUnderwritingStatus("assigedUnderwriter"); // 심사자 배정됨
+        underwriting.setUnderwriterId(underwriterId); // 심사자 배정됨
+
+        // DB Update
+        underwritingRepository.save(underwriting);        
     }
 
 

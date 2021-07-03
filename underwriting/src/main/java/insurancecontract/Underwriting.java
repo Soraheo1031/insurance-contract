@@ -29,13 +29,13 @@ public class Underwriting {
     @PostUpdate
     public void onPostUpdate(){
         
-        if("approveSubscription".equals(this.getSubscriptionStatus())) {
+        if("approveSubscription".equals(this.getUnderwritingStatus())) {
             SubscriptionContracted subscriptionContracted = new SubscriptionContracted();
             BeanUtils.copyProperties(this, subscriptionContracted);
             subscriptionContracted.publishAfterCommit();
         }
 
-        if("refuseSubscription".equals(this.getSubscriptionStatus())) {
+        if("refuseSubscription".equals(this.getUnderwritingStatus())) {
             SubscriptionRefused subscriptionRefused = new SubscriptionRefused();
             BeanUtils.copyProperties(this, subscriptionRefused);
             subscriptionRefused.publishAfterCommit();

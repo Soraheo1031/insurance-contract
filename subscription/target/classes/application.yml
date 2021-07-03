@@ -35,6 +35,10 @@ logging:
   level:
     org.hibernate.type: trace
     org.springframework.cloud: debug
+prop:
+  payment:
+    url: http://localhost:8082
+
 server:
   port: 8081
 ---
@@ -62,3 +66,6 @@ spring:
         event-out:
           destination: insurancecontract
           contentType: application/json
+prop:
+  payment:
+    url: http://gateway:8080
