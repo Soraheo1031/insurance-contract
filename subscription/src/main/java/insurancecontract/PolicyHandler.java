@@ -39,10 +39,12 @@ public class PolicyHandler{
         System.out.println("\n\n##### listener ConfirmUnderwriterId : " + underwriterAssignned.toJson() + "\n\n");
 
         long subscriptionId = underwriterAssignned.getSubscriptionId(); // 심사자배정된 청약Id
+        long underwritingId = underwriterAssignned.getUnderwritingId(); // 심사Id
 
         Optional<Subscription> res = subscriptionRepository.findById(subscriptionId);
         Subscription subscription = res.get();
 
+        subscription.setUnderwritingId(underwritingId); // 심사자배정 상태
         subscription.setSubscriptionStatus("setUnderwriter"); // 심사자배정 상태
 
         // DB Update

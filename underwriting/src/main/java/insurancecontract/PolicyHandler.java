@@ -21,11 +21,14 @@ public class PolicyHandler{
         System.out.println("\n\n##### listener RegisterUnderwriting : " + subscriptionCreated.toJson() + "\n\n");
 
         long subscriptionId = subscriptionCreated.getSubscriptionId(); // 심사자배정할 청약Id
+        long paymentId = subscriptionCreated.getPaymentId(); // 결제Id
         long underwriterId = Long.valueOf("77001520"); // 심사자Id
 
-        Optional<Underwriting> res = underwritingRepository.findById(subscriptionId);
-        Underwriting underwriting = res.get();
+        // Optional<Underwriting> res = underwritingRepository.findById(subscriptionId);
+        Underwriting underwriting = new Underwriting();
 
+        underwriting.setSubscriptionId(subscriptionId); // 청약Id
+        underwriting.setPaymentId(paymentId); // 결제Id
         underwriting.setUnderwritingStatus("assigedUnderwriter"); // 심사자 배정됨
         underwriting.setUnderwriterId(underwriterId); // 심사자 배정됨
 
