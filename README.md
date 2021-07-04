@@ -153,34 +153,34 @@
         - General Domain: 결제 : 결제서비스로 3rd Party 외부 서비스를 사용하는 것이 경쟁력이 높음
         
 ### 폴리시의 이동과 컨텍스트 매핑 (점선은 Pub/Sub, 실선은 Req/Resp)
-  ![image](https://user-images.githubusercontent.com/84304043/124087737-405cce80-da8d-11eb-96b4-cd711e359d40.png)
+  ![image](https://user-images.githubusercontent.com/84304043/124390076-fd1c8d00-dd24-11eb-8368-849bf51d0874.png)
 
 ### 기능적/비기능적 요구사항을 커버하는지 검증
 
-![image](https://user-images.githubusercontent.com/84304043/124089051-7fd7ea80-da8e-11eb-8ee7-f59c1796dfde.png)
+ ![image](https://user-images.githubusercontent.com/84304043/124390098-0e659980-dd25-11eb-9423-cc6a91604477.png)
 
   - (ok) 고객이 보험 상품을 선택하여 보험에 가입(청약)한다.
   - (ok) 청약 신청과 동시에 보험료 결제가 진행된다.
   - (ok) 보험료 결제가 완료되면 청약 신청이 완료된다.
   - (ok) 청약 신청이 완료되면 심사자가 배정된다.
 
-![image](https://user-images.githubusercontent.com/84304043/124089379-cfb6b180-da8e-11eb-9d22-1c29ecc1d986.png)
+![image](https://user-images.githubusercontent.com/84304043/124390116-1faea600-dd25-11eb-92b0-69225cff46dc.png)
     
   - (ok) 고객은 청약 신청을 취소할 수 있다. (단, 심사자 배정전까지만 가능. 심사Id로 구분)
     
-![image](https://user-images.githubusercontent.com/84304043/124089986-63887d80-da8f-11eb-955e-35cac952ba03.png)
+![image](https://user-images.githubusercontent.com/84304043/124390127-2b9a6800-dd25-11eb-88e8-3ceedfe2b051.png)
 
  - (ok) 심사자가 승인하면 보험 계약이 체결된다. 
  - (ok) 심사자가 거절하면 보험료 결제가 취소된다.
 
- ![image](https://user-images.githubusercontent.com/84304043/124090089-7b600180-da8f-11eb-853b-8df3ca378875.png)
+ ![image](https://user-images.githubusercontent.com/84304043/124390145-394fed80-dd25-11eb-9c94-2c6fedc80715.png)
 
  - (ok) 고객은 보험 청약에 대한 정보 및 청약 진행 상태를 확인 할 수 있다.  
 
 
 ### 비기능 요구사항에 대한 검증
 
- ![image](https://user-images.githubusercontent.com/84304043/124091423-caf2fd00-da90-11eb-951e-a04fb17aa0b8.png)
+ ![image](https://user-images.githubusercontent.com/84304043/124390169-48cf3680-dd25-11eb-8f67-37114a119abf.png)
 
     - 마이크로 서비스를 넘나드는 시나리오에 대한 트랜잭션 처리
         - 고객 청약시 결제처리: 결제가 완료되지 않은 청약은 절대 받지 않는다고 결정하여, ACID 트랜잭션 적용. 청약 요청과 결제처리에 대해서는 Request-Response 방식 처리함.
