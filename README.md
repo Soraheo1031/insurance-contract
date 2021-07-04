@@ -239,43 +239,44 @@ mvn spring-boot:run
 
 ## API 게이트웨이
       1. gateway 스프링부트 App을 추가 후 application.yaml내에 각 마이크로 서비스의 routes 를 추가하고 gateway 서버의 포트를 8080 으로 설정함
-       
+
+
           - application.yml 예시
             ```
-spring:
-  profiles: docker
-  cloud:
-    gateway:
-      routes:
-        - id: subscription
-          uri: http://subscription:8080
-          predicates:
-            - Path=/subscriptions/** 
-        - id: payment
-          uri: http://payment:8080
-          predicates:
-            - Path=/payments/** 
-        - id: underwriting
-          uri: http://underwriting:8080
-          predicates:
-            - Path=/underwritings/** 
-        - id: mypage
-          uri: http://mypage:8080
-          predicates:
-            - Path= /subsciptionViews/**
-      globalcors:
-        corsConfigurations:
-          '[/**]':
-            allowedOrigins:
-              - "*"
-            allowedMethods:
-              - "*"
-            allowedHeaders:
-              - "*"
-            allowCredentials: true
+	spring:
+	  profiles: docker
+	  cloud:
+	    gateway:
+	      routes:
+	        - id: subscription
+	          uri: http://subscription:8080
+	          predicates:
+	            - Path=/subscriptions/** 
+	        - id: payment
+	          uri: http://payment:8080
+	          predicates:
+	            - Path=/payments/** 
+	        - id: underwriting
+	          uri: http://underwriting:8080
+	          predicates:
+	            - Path=/underwritings/** 
+	        - id: mypage
+	          uri: http://mypage:8080
+	          predicates:
+	            - Path= /subsciptionViews/**
+	      globalcors:
+	        corsConfigurations:
+	          '[/**]':
+	            allowedOrigins:
+	              - "*"
+	            allowedMethods:
+	              - "*"
+	            allowedHeaders:
+	              - "*"
+	            allowCredentials: true
 
-server:
-  port: 8080  
+	server:
+	  port: 8080  
             ```
 
          
