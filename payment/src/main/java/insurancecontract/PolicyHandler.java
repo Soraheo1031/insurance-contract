@@ -26,7 +26,7 @@ public class PolicyHandler{
         Optional<Payment> res = paymentRepository.findById(paymentId);
         Payment payment = res.get();
 
-        payment.setPaymentStatus("cancelled"); // 취소 상태로 
+        payment.setPaymentStatus("cancelPayment"); // 취소 상태로 
 
         // DB Update
         paymentRepository.save(payment);
@@ -44,7 +44,7 @@ public class PolicyHandler{
         Optional<Payment> res = paymentRepository.findById(paymentId);
         Payment payment = res.get();
 
-        payment.setPaymentStatus("cancelled_Refused"); // 취소 상태로 
+        payment.setPaymentStatus("cancelPayment_refused"); // 취소 상태로 
 
         // DB Update
         paymentRepository.save(payment);       

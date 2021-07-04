@@ -28,7 +28,7 @@ public class PolicyHandler{
 
         underwriting.setSubscriptionId(subscriptionId); // 청약Id
         underwriting.setPaymentId(paymentId); // 결제Id
-        underwriting.setUnderwritingStatus("assigedUnderwriter"); // 심사자 배정됨
+        underwriting.setUnderwritingStatus("underwriterAssiged"); // 심사자 배정됨
         underwriting.setUnderwriterId(underwriterId); // 심사자 배정됨
 
         // DB Update

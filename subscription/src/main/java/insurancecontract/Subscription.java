@@ -32,7 +32,7 @@ public class Subscription {
 
         payment.setSubscriptionId(this.getSubscriptionId());
         //payment.setProductName(this.getProductName());
-        payment.setPaymentStatus("paid");
+        payment.setPaymentStatus("approvePayment");
 
         // mappings goes here
         SubscriptionApplication.applicationContext.getBean(insurancecontract.external.PaymentService.class)
@@ -76,7 +76,7 @@ public class Subscription {
         }
 
         
-        if("refuseRefuse".equals(this.getSubscriptionStatus())) {
+        if("confirmRefuse".equals(this.getSubscriptionStatus())) {
             SubscriptionRefused subscriptionRefused = new SubscriptionRefused();
             BeanUtils.copyProperties(this, subscriptionRefused);
             subscriptionRefused.publishAfterCommit();

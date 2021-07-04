@@ -1,4 +1,3 @@
-
 package insurancecontract;
 
 public class PaymentIdConfirmed extends AbstractEvent {
@@ -8,6 +7,10 @@ public class PaymentIdConfirmed extends AbstractEvent {
     private Long paymentId;
     private Long underwritingId;
     private String productName;
+
+    public PaymentIdConfirmed(){
+        super();
+    }
 
     public Long getSubscriptionId() {
         return subscriptionId;
@@ -45,4 +48,3 @@ public class PaymentIdConfirmed extends AbstractEvent {
         this.productName = productName;
     }
 }
-

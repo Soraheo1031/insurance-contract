@@ -61,6 +61,9 @@ public class SubsciptionViewViewHandler {
         try {
             if (!paymentApproved.validate()) return;
                 // view 객체 조회
+        
+            System.out.println("\n\n##### listener ApprovedPayment : " + paymentApproved.toJson() + "\n\n");
+
             Optional<SubsciptionView> subsciptionViewOptional = subsciptionViewRepository.findById(paymentApproved.getSubscriptionId());
             if( subsciptionViewOptional.isPresent()) {
                 SubsciptionView subsciptionView = subsciptionViewOptional.get();

@@ -17,18 +17,20 @@ public class Payment {
 
     @PostPersist
     public void onPostPersist(){
+        
         PaymentApproved paymentApproved = new PaymentApproved();
         BeanUtils.copyProperties(this, paymentApproved);
         paymentApproved.publishAfterCommit();
-
-
     }
 
     @PostUpdate
     public void onPostUpdate(){
+        if("cancelled".equals(this.getPaymentStatus())
+         || "cancelled_refused".equals(this.getPaymentStatus())) {
         PaymentCancelled paymentCancelled = new PaymentCancelled();
         BeanUtils.copyProperties(this, paymentCancelled);
         paymentCancelled.publishAfterCommit();
+        }
 
 
     }

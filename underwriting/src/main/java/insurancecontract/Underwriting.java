@@ -19,17 +19,17 @@ public class Underwriting {
 
     @PostPersist
     public void onPostPersist(){
+        if("underwriterAssiged".equals(this.getUnderwritingStatus())) {
         UnderwriterAssignned underwriterAssignned = new UnderwriterAssignned();
         BeanUtils.copyProperties(this, underwriterAssignned);
         underwriterAssignned.publishAfterCommit();
-
-
+        }
     }
 
     @PostUpdate
     public void onPostUpdate(){
         
-        if("approveSubscription".equals(this.getUnderwritingStatus())) {
+        if("underwriterAssiged".equals(this.getUnderwritingStatus())) {
             SubscriptionContracted subscriptionContracted = new SubscriptionContracted();
             BeanUtils.copyProperties(this, subscriptionContracted);
             subscriptionContracted.publishAfterCommit();

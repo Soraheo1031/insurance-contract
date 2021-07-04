@@ -86,6 +86,9 @@ public class AbstractEvent {
     }
 
     public boolean validate(){
+        System.out.println("\n\n##### 1.check:   "+getClass().getSimpleName());
+        System.out.println("\n\n##### 2.check:   "+getEventType());
+        
         return getEventType().equals(getClass().getSimpleName());
     }
 }

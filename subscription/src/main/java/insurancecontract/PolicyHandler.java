@@ -25,7 +25,7 @@ public class PolicyHandler{
         Optional<Subscription> res = subscriptionRepository.findById(subscriptionId);
         Subscription subscription = res.get();
 
-        subscription.setSubscriptionStatus("cancelled"); // 취소 상태
+        subscription.setSubscriptionStatus("confirmCancel"); // 취소 상태
 
         // DB Update
         subscriptionRepository.save(subscription);   
@@ -45,7 +45,7 @@ public class PolicyHandler{
         Subscription subscription = res.get();
 
         subscription.setUnderwritingId(underwritingId); // 심사자배정 상태
-        subscription.setSubscriptionStatus("setUnderwriter"); // 심사자배정 상태
+        subscription.setSubscriptionStatus("confirmUnderwriterId"); // 심사자배정 상태
 
         // DB Update
         subscriptionRepository.save(subscription);  
@@ -64,7 +64,7 @@ public class PolicyHandler{
         Subscription subscription = res.get();
 
         subscription.setPaymentId(paymentApproved.getPaymentId()); // 결제완료
-        subscription.setSubscriptionStatus("subscriptionPaid"); // 결제완료 상태
+        subscription.setSubscriptionStatus("confirmPaymentId"); // 결제완료 상태
 
         // DB Update
         subscriptionRepository.save(subscription);   
@@ -81,7 +81,7 @@ public class PolicyHandler{
         Optional<Subscription> res = subscriptionRepository.findById(subscriptionId);
         Subscription subscription = res.get();
 
-        subscription.setSubscriptionStatus("refused"); // 심사거절 상태
+        subscription.setSubscriptionStatus("confirmRefuse"); // 심사거절 상태
 
         // DB Update
         subscriptionRepository.save(subscription);  
