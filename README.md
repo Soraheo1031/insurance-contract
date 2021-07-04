@@ -218,16 +218,17 @@ mvn spring-boot:run
 
 ## CQRS
 
-창고(Storage) 의 사용가능 여부, 리뷰 및 예약/결재 등 총 Status 에 대하여 고객(Customer)이 조회 할 수 있도록 CQRS 로 구현하였다.
-- storage, review, reservation, payment 개별 Aggregate Status 를 통합 조회하여 성능 Issue 를 사전에 예방할 수 있다.
+청약(subscription) 의 청약신청, 결제여부, 심사확인 등 Status 에 대하여 고객(Customer)이 조회 할 수 있도록 CQRS 로 구현하였다.
+- subscription, payment, underwriting 개별 Aggregate Status 를 통합 조회하여 성능 Issue 를 사전에 예방할 수 있다.
 - 비동기식으로 처리되어 발행된 이벤트 기반 Kafka 를 통해 수신/처리 되어 별도 Table 에 관리한다
-- Table 모델링 (StorageView)
+- Table 모델링 (SubscriptionView)
  
-  ![image](https://user-images.githubusercontent.com/84304043/122712630-2fe37180-d29f-11eb-9ad4-1bfe12fbeb25.png)
+  ![image](https://user-images.githubusercontent.com/84304043/124391036-8d5cd100-dd29-11eb-8135-3dae2fec424f.png)
  
 - viewpage MSA ViewHandler 를 통해 구현 ("StorageRegistered" 이벤트 발생 시, Pub/Sub 기반으로 별도 Storageview 테이블에 저장)
- ![image](https://user-images.githubusercontent.com/84304043/122714557-6f5f8d00-d2a2-11eb-9e82-d811f3e1ab3e.png)
- ![image](https://user-images.githubusercontent.com/84304043/122714566-71c1e700-d2a2-11eb-92e9-51ef24aa46ae.png)
+  ![image](https://user-images.githubusercontent.com/84304043/124391093-ddd42e80-dd29-11eb-8fc1-cc671213c370.png)
+  ![image](https://user-images.githubusercontent.com/84304043/124391162-43281f80-dd2a-11eb-92d0-a1baeb3fa557.png)
+
  
 - 실제로 view 페이지를 조회해 보면 모든 storage에 대한 전반적인 예약 상태, 결제 상태, 리뷰 건수 등의 정보를 종합적으로 알 수 있다
 ```
@@ -241,44 +242,40 @@ mvn spring-boot:run
        
           - application.yml 예시
             ```
-	spring:
-	  profiles: docker
-	  cloud:
-	    gateway:
-	      routes:
-		- id: payment
-		  uri: http://payment:8081
-		  predicates:
-		    - Path=/payments/** 
-		- id: storage
-		  uri: http://storage:8082
-		  predicates:
-		    - Path=/storages/**, /reviews/**, /check/**
-		- id: reservation
-		  uri: http://reservation:8083
-		  predicates:
-		    - Path=/reservations/** 
-		- id: message
-		  uri: http://message:8084
-		  predicates:
-		    - Path=/messages/** 
-		- id: viewpage
-		  uri: http://viewpage:8085
-		  predicates:
-		    - Path= /storageviews/**
-	      globalcors:
-		corsConfigurations:
-		  '[/**]':
-		    allowedOrigins:
-		      - "*"
-		    allowedMethods:
-		      - "*"
-		    allowedHeaders:
-		      - "*"
-		    allowCredentials: true
+spring:
+  profiles: docker
+  cloud:
+    gateway:
+      routes:
+        - id: subscription
+          uri: http://subscription:8080
+          predicates:
+            - Path=/subscriptions/** 
+        - id: payment
+          uri: http://payment:8080
+          predicates:
+            - Path=/payments/** 
+        - id: underwriting
+          uri: http://underwriting:8080
+          predicates:
+            - Path=/underwritings/** 
+        - id: mypage
+          uri: http://mypage:8080
+          predicates:
+            - Path= /subsciptionViews/**
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins:
+              - "*"
+            allowedMethods:
+              - "*"
+            allowedHeaders:
+              - "*"
+            allowCredentials: true
 
-	server:
-	  port: 8080       
+server:
+  port: 8080  
             ```
 
          
@@ -291,7 +288,7 @@ mvn spring-boot:run
 	kind: Deployment
 	metadata:
 	  name: gateway
-	  namespace: storagerent
+	  namespace: insurancecontract
 	  labels:
 	    app: gateway
 	spec:
