@@ -8,5 +8,5 @@ insurancecontract\config\kafka\KafkaProcessor.class
 insurancecontract\UnderwritingController.class
 insurancecontract\UnderwritingRepository.class
 insurancecontract\PolicyHandler.class
-insurancecontract\SubscriptionCreated.class
+insurancecontract\PaymentIdConfirmed.class
 insurancecontract\UnderwritingApplication.class

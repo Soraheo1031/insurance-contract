@@ -1,7 +1,7 @@
 
 package insurancecontract;
 
-public class SubscriptionCreated extends AbstractEvent {
+public class PaymentIdConfirmed extends AbstractEvent {
 
     private Long subscriptionId;
     private String subscriptionStatus;

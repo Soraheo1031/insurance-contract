@@ -14,17 +14,16 @@ public class PolicyHandler{
     @Autowired UnderwritingRepository underwritingRepository;
 
     @StreamListener(KafkaProcessor.INPUT)
-    public void wheneverSubscriptionCreated_RegisterUnderwriting(@Payload SubscriptionCreated subscriptionCreated){
+    public void wheneverPaymentIdConfirmed_RegisterUnderwriting(@Payload PaymentIdConfirmed paymentIdConfirmed){
 
-        if(!subscriptionCreated.validate()) return;
+        if(!paymentIdConfirmed.validate()) return;
 
-        System.out.println("\n\n##### listener RegisterUnderwriting : " + subscriptionCreated.toJson() + "\n\n");
+        System.out.println("\n\n##### listener RegisterUnderwriting : " + paymentIdConfirmed.toJson() + "\n\n");
 
-        long subscriptionId = subscriptionCreated.getSubscriptionId(); // 심사자배정할 청약Id
-        long paymentId = subscriptionCreated.getPaymentId(); // 결제Id
+        long subscriptionId = paymentIdConfirmed.getSubscriptionId(); // 심사자배정할 청약Id
+        long paymentId = paymentIdConfirmed.getPaymentId(); // 결제Id
         long underwriterId = Long.valueOf("77001520"); // 심사자Id
 
-        // Optional<Underwriting> res = underwritingRepository.findById(subscriptionId);
         Underwriting underwriting = new Underwriting();
 
         underwriting.setSubscriptionId(subscriptionId); // 청약Id
