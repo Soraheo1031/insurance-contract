@@ -216,202 +216,419 @@ cd mypage
 mvn spring-boot:run 
 ```
 
+## CQRS
+
+창고(Storage) 의 사용가능 여부, 리뷰 및 예약/결재 등 총 Status 에 대하여 고객(Customer)이 조회 할 수 있도록 CQRS 로 구현하였다.
+- storage, review, reservation, payment 개별 Aggregate Status 를 통합 조회하여 성능 Issue 를 사전에 예방할 수 있다.
+- 비동기식으로 처리되어 발행된 이벤트 기반 Kafka 를 통해 수신/처리 되어 별도 Table 에 관리한다
+- Table 모델링 (StorageView)
+ 
+  ![image](https://user-images.githubusercontent.com/84304043/122712630-2fe37180-d29f-11eb-9ad4-1bfe12fbeb25.png)
+ 
+- viewpage MSA ViewHandler 를 통해 구현 ("StorageRegistered" 이벤트 발생 시, Pub/Sub 기반으로 별도 Storageview 테이블에 저장)
+ ![image](https://user-images.githubusercontent.com/84304043/122714557-6f5f8d00-d2a2-11eb-9e82-d811f3e1ab3e.png)
+ ![image](https://user-images.githubusercontent.com/84304043/122714566-71c1e700-d2a2-11eb-92e9-51ef24aa46ae.png)
+ 
+- 실제로 view 페이지를 조회해 보면 모든 storage에 대한 전반적인 예약 상태, 결제 상태, 리뷰 건수 등의 정보를 종합적으로 알 수 있다
+```
+   http GET localhost:8088/storageviews
+```
+![뷰](https://user-images.githubusercontent.com/84304043/122842865-227ac580-d339-11eb-906e-2873cd375b04.PNG)
+
+
+## API 게이트웨이
+      1. gateway 스프링부트 App을 추가 후 application.yaml내에 각 마이크로 서비스의 routes 를 추가하고 gateway 서버의 포트를 8080 으로 설정함
+       
+          - application.yml 예시
+            ```
+	spring:
+	  profiles: docker
+	  cloud:
+	    gateway:
+	      routes:
+		- id: payment
+		  uri: http://payment:8081
+		  predicates:
+		    - Path=/payments/** 
+		- id: storage
+		  uri: http://storage:8082
+		  predicates:
+		    - Path=/storages/**, /reviews/**, /check/**
+		- id: reservation
+		  uri: http://reservation:8083
+		  predicates:
+		    - Path=/reservations/** 
+		- id: message
+		  uri: http://message:8084
+		  predicates:
+		    - Path=/messages/** 
+		- id: viewpage
+		  uri: http://viewpage:8085
+		  predicates:
+		    - Path= /storageviews/**
+	      globalcors:
+		corsConfigurations:
+		  '[/**]':
+		    allowedOrigins:
+		      - "*"
+		    allowedMethods:
+		      - "*"
+		    allowedHeaders:
+		      - "*"
+		    allowCredentials: true
+
+	server:
+	  port: 8080       
+            ```
+
+         
+      2. Kubernetes용 Deployment.yaml 을 작성하고 Kubernetes에 Deploy를 생성함
+          - Deployment.yaml 예시
+          
+
+            ```
+	apiVersion: apps/v1
+	kind: Deployment
+	metadata:
+	  name: gateway
+	  namespace: storagerent
+	  labels:
+	    app: gateway
+	spec:
+	  replicas: 1
+	  selector:
+	    matchLabels:
+	      app: gateway
+	  template:
+	    metadata:
+	      labels:
+		app: gateway
+	    spec:
+	      containers:
+		- name: gateway
+		  image: 740569282574.dkr.ecr.ap-northeast-1.amazonaws.com/user02-gateway:v1
+		  ports:
+		    - containerPort: 8080
+            ```               
+            
+
+            ```
+            Deploy 생성
+            kubectl apply -f deployment.yaml
+            ```     
+          - Kubernetes에 생성된 Deploy. 확인
+            
+![image](https://user-images.githubusercontent.com/84304043/122843390-4d194e00-d33a-11eb-82b9-d156fce642d0.png)
+	    
+            
+      3. Kubernetes용 Service.yaml을 작성하고 Kubernetes에 Service/LoadBalancer을 생성하여 Gateway 엔드포인트를 확인함. 
+          - Service.yaml 예시
+          
+            ```
+            apiVersion: v1
+              kind: Service
+              metadata:
+                name: gateway
+                namespace: storagerent
+                labels:
+                  app: gateway
+              spec:
+                ports:
+                  - port: 8080
+                    targetPort: 8080
+                selector:
+                  app: gateway
+                type:
+                  LoadBalancer           
+            ```             
+
+           
+            ```
+            Service 생성
+            kubectl apply -f service.yaml            
+            ```             
+            
+            
+          - API Gateay 엔드포인트 확인
+           
+            ```
+            Service  및 엔드포인트 확인 
+            kubectl get svc -n storagerent           
+            ```                
+
+![image](https://user-images.githubusercontent.com/84304043/122770160-229aa700-d2e0-11eb-9f85-b6fcb8cabe0e.png)
+
+
+# Correlation
+
+창고대여 프로젝트에서는 PolicyHandler에서 처리 시 어떤 건에 대한 처리인지를 구별하기 위한 Correlation-key 구현을 
+이벤트 클래스 안의 변수로 전달받아 서비스간 연관된 처리를 정확하게 구현하고 있습니다. 
+
+아래의 구현 예제를 보면
+
+예약(Reservation)을 하면 동시에 연관된 창고(Storage), 결제(Payment) 등의 서비스의 상태가 적당하게 변경이 되고,
+예약건의 취소를 수행하면 다시 연관된 창고(Storage), 결제(Payment) 등의 서비스의 상태값 등의 데이터가 적당한 상태로 변경되는 것을
+확인할 수 있습니다.
+
+- 창고등록
+```
+http POST http://localhost:8088/storages description="BigStorage" price=200000 storageStatus="available"
+```  
+![image](https://user-images.githubusercontent.com/84304043/122844125-eb59e380-d33b-11eb-9a85-1a892021ca0d.png)
+- 예약등록
+```
+http POST localhost:8088/reservations storageId=1 price=200000 reservationStatus="reqReserve"
+```  
+![image](https://user-images.githubusercontent.com/84304043/122843690-0415c980-d33b-11eb-9558-c423faa1bd42.png)
+- 예약 후 - 창고 상태
+```
+http GET http://localhost:8088/storages/1
+```  
+![image](https://user-images.githubusercontent.com/84304043/122843724-1d1e7a80-d33b-11eb-8a52-8b7f772df2e3.png)
+- 예약 후 - 예약 상태
+```
+http GET http://localhost:8088/reservations/1
+```  
+![image](https://user-images.githubusercontent.com/84304043/122843763-31fb0e00-d33b-11eb-83f6-140191ec1a6d.png)
+- 예약 후 - 결제 상태
+```
+http GET http://localhost:8088/payments/1
+``` 
+![image](https://user-images.githubusercontent.com/84304043/122843798-43441a80-d33b-11eb-92c4-160c77f6f3ef.png)
+- 예약 취소
+```
+http PATCH localhost:8088/reservations/1 storageId=1 price=200000 reservationStatus="reqCancel"
+``` 
+![image](https://user-images.githubusercontent.com/84304043/122843840-57881780-d33b-11eb-88fe-61d8055ff1e0.png)
+- 예약 취소 후 - 창고 상태
+```
+http GET http://localhost:8088/storages/1
+``` 
+![image](https://user-images.githubusercontent.com/84304043/122843892-6ec70500-d33b-11eb-9663-e4c894dff60b.png)
+- 예약 취소 후 - 예약 상태
+```
+http GET http://localhost:8088/reservations/1
+``` 
+![image](https://user-images.githubusercontent.com/84304043/122843932-856d5c00-d33b-11eb-88a9-921c14d97ed0.png)
+- 예약 취소 후 - 결제 상태
+```
+http GET http://localhost:8088/payments/1
+``` 
+![image](https://user-images.githubusercontent.com/84304043/122843963-95853b80-d33b-11eb-8e0a-4831fa73a5b4.png)
+
+
 ## DDD 의 적용
 
-- 각 서비스내에 도출된 핵심 Aggregate Root 객체를 Entity 로 선언하였다: (예시는 subscription 마이크로 서비스). 이때 가능한 현업에서 사용하는 언어 (유비쿼터스 랭귀지)를 그대로 사용하려고 노력했다.
+- 각 서비스내에 도출된 핵심 Aggregate Root 객체를 Entity 로 선언하였다. (예시는 storage 마이크로 서비스). 이때 가능한 현업에서 사용하는 언어 (유비쿼터스 랭귀지)를 그대로 사용하려고 노력했다. 현실에서 발생가능한 이벤트에 의하여 마이크로 서비스들이 상호 작용하기 좋은 모델링으로 구현을 하였다.
 
 ```
-package insurancecontract;
+package storagerent;
 
 import javax.persistence.*;
 import org.springframework.beans.BeanUtils;
-import java.util.List;
-import java.util.Date;
 
 @Entity
-@Table(name="Subscription_table")
-public class Subscription {
+@Table(name="Storage_table")
+public class Storage {
 
     @Id
     @GeneratedValue(strategy=GenerationType.AUTO)
-    private Long subscriptionId;
-    private String subscriptionStatus;
-    private Long paymentId;
-    private Long underwritingId;
-    private String productName;
-    
-    public Long getSubscriptionId() {
-        return subscriptionId;
+    private Long storageId;
+    private String storageStatus;
+    private String description;
+    private Long reviewCnt;
+    private String lastAction;
+    private Float price;
+
+    @PostPersist
+    public void onPostPersist(){
+        StorageRegistered storageRegistered = new StorageRegistered();
+        BeanUtils.copyProperties(this, storageRegistered);
+        storageRegistered.publishAfterCommit();
     }
 
-    public void setSubscriptionId(Long subscriptionId) {
-        this.subscriptionId = subscriptionId;
-    }
-    public String getSubscriptionStatus() {
-        return subscriptionStatus;
-    }
-
-    public void setSubscriptionStatus(String subscriptionStatus) {
-        this.subscriptionStatus = subscriptionStatus;
-    }
-    public Long getPaymentId() {
-        return paymentId;
-    }
-
-    public void setPaymentId(Long paymentId) {
-        this.paymentId = paymentId;
-    }
-    public Long getUnderwritingId() {
-        return underwritingId;
+    @PostUpdate
+    public void onPostUpdate(){
+        if("modify".equals(lastAction) || "review".equals(lastAction)) {
+            StorageModified storageModified = new StorageModified();
+            BeanUtils.copyProperties(this, storageModified);
+            storageModified.publishAfterCommit();
+        }
+        if("reserved".equals(lastAction)) {
+            StorageReserved storageReserved = new StorageReserved();
+            BeanUtils.copyProperties(this, storageReserved);
+            storageReserved.publishAfterCommit();
+        }
+        if("cancelled".equals(lastAction)) {
+            StorageCancelled storageCancelled = new StorageCancelled();
+            BeanUtils.copyProperties(this, storageCancelled);
+            storageCancelled.publishAfterCommit();
+        }
     }
 
-    public void setUnderwritingId(Long underwritingId) {
-        this.underwritingId = underwritingId;
+    @PreRemove
+    public void onPreRemove(){
+        StorageDeleted storageDeleted = new StorageDeleted();
+        BeanUtils.copyProperties(this, storageDeleted);
+        storageDeleted.publishAfterCommit();
     }
-    public String getProductName() {
-        return productName;
+    public Long getStorageId() {
+        return storageId;
     }
-
-    public void setProductName(String productName) {
-        this.productName = productName;
+    public void setStorageId(Long storageId) {
+        this.storageId = storageId;
+    }
+    public String getStorageStatus() {
+        return storageStatus;
+    }
+    public void setStorageStatus(String storageStatus) {
+        this.storageStatus = storageStatus;
+    }
+    public String getDescription() {
+        return description;
+    }
+    public void setDescription(String description) {
+        this.description = description;
+    }
+    public Long getReviewCnt() {
+        return reviewCnt;
+    }
+    public void setReviewCnt(Long reviewCnt) {
+        this.reviewCnt = reviewCnt;
+    }
+    public String getLastAction() {
+        return lastAction;
+    }
+    public void setLastAction(String lastAction) {
+        this.lastAction = lastAction;
+    }
+    public Float getPrice() {
+        return price;
+    }
+    public void setPrice(Float price) {
+        this.price = price;
     }
 }
+
+
 ```
 - Entity Pattern 과 Repository Pattern 을 적용하여 JPA 를 통하여 다양한 데이터소스 유형 (RDB or NoSQL) 에 대한 별도의 처리가 없도록 데이터 접근 어댑터를 자동 생성하기 위하여 Spring Data REST 의 RestRepository 를 적용하였다
 ```
-package insurancecontract;
+package storagerent;
 
 import org.springframework.data.repository.PagingAndSortingRepository;
 import org.springframework.data.rest.core.annotation.RepositoryRestResource;
 
-@RepositoryRestResource(collectionResourceRel="subscriptions", path="subscriptions")
-public interface SubscriptionRepository extends PagingAndSortingRepository<Subscription, Long>{
-
+@RepositoryRestResource(collectionResourceRel="storages", path="storages")
+public interface StorageRepository extends PagingAndSortingRepository<Storage, Long>{
 
 }
 ```
 - 적용 후 REST API 의 테스트
 ```
-# subscription 서비스의 보험청약 접수처리
-http POST http://localhost:8081/subscriptions  subscriptionStatus="created" productName="Fisrtcancer"
+# storage 서비스의 대여창고 등록
+http POST http://localhost:8088/storages description="storage1" price=200000 storageStatus="available"
+  
+# reservation 서비스의 창고 예약 요청
+http POST http:localhost:8088/reservations storageId=1 price=200000 reservationStatus="reqReserve"
 
-# underwriting 서비스의 심사승인처리
-http PATCH http://localhost:8083/underwritings/1  underwritingStatus="approveSubscription"  subscriptionId=1
-
-# 상태 확인
-http http://localhost:8081/subscriptions/1
-http http://localhost:8082/payments/1
-http http://localhost:8083/underwritings/1
-http http://localhost:8084/subscriptionViews/1
-```
-
-
-## 폴리글랏 프로그래밍 / 폴리글랏 퍼시스턴스
-
-청약 관리 서비스(mypage)의 시나리오인 청약진행상태를 고객이 확인 가능하도록 하는 기능의 구현 파트는 해당 팀이 DB를 mysql 을 이용하여 구현하기로 하였다. 
-```
-# (history) Kafka Consumer
-
-from kafka import KafkaConsumer
-import mysql.connector
-import json
-
-# DB 연결 및 생성
-
-consumer = KafkaConsumer('bomtada', bootstrap_servers=['localhost:9092'])
-
-for message in consumer:
-    print ("%s:%d:%d: key=%s value=%s" % (message.topic, message.partition,
-                                            message.offset, message.key,
-                                            message.value))
-    # DB 저장                     
+# reservation 서비스의 예약 상태 확인
+http GET http://localhost:8088/reservations/1
 
 ```
-```
-# (history) 청구이력 조회화면
 
-from flask import Flask, request
-import mysql.connector
+## 동기식 호출(Sync) 과 Fallback 처리
 
-app = Flask(__name__)
+분석 단계에서의 조건 중 하나로 예약 시 창고(storage) 간의 예약 가능 상태 확인 호출은 동기식 일관성을 유지하는 트랜잭션으로 처리하기로 하였다. 호출 프로토콜은 이미 앞서 Rest Repository 에 의해 노출되어있는 REST 서비스를 FeignClient 를 이용하여 호출하도록 한다. 또한 예약(reservation) -> 결제(payment) 서비스도 동기식으로 처리하기로 하였다.
 
-@app.route("/history")
-def hello():
-  # DB 조회 및 화면 생성
-
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=8084)
-```
-
-
-## 동기식 호출 과 Fallback 처리
-
-분석단계에서의 조건 중 하나로 청약신청(SubscriptionCreated)->결제(approvePayment) 간의 호출은 동기식 일관성을 유지하는 트랜잭션으로 처리하기로 하였다. 호출 프로토콜은 이미 앞서 Rest Repository 에 의해 노출되어있는 REST 서비스를 FeignClient 를 이용하여 호출하도록 한다. 
-
-- 결제 서비스를 호출하기 위하여 Stub과 (FeignClient) 를 이용하여 Service 대행 인터페이스 (Proxy) 를 구현 
+- 창고, 결제 서비스를 호출하기 위하여 Stub과 (FeignClient) 를 이용하여 Service 대행 인터페이스 (Proxy) 를 구현 
 
 ```
-# (subscription) PaymentService.java
+# PaymentService.java
 
-package insurancecontract.external;
+package storagerent.external;
+
+<import문 생략>
 
 @FeignClient(name="payment", url="${prop.payment.url}")
 public interface PaymentService {
-
-    @RequestMapping(method= RequestMethod.GET, path="/payments")
+    @RequestMapping(method= RequestMethod.POST, path="/payments")
     public void approvePayment(@RequestBody Payment payment);
-
 }
+
+# StorageService.java
+
+package storagerent.external;
+
+<import문 생략>
+
+@FeignClient(name="Storage", url="${prop.storage.url}")
+public interface StorageService {
+
+    @RequestMapping(method=RequestMethod.GET, path="/check/chkAndReqReserve")
+    public boolean chkAndReqReserve(@RequestParam("storageId") long storageId);
+}
+
 ```
 
-- 청구취소(cancelClaim) Command를 받은 직후(@PreUpdate) 심사취소를 요청하도록 처리
-- 심사취소가 완료되어 true가 반환되면 청구취소됨(claimCanceled) Event를 publish
+- 예약 요청을 받은 직후(@PostPersist) 가능상태 확인 및 결제를 동기(Sync)로 요청하도록 처리
 ```
-# Claim.java (Entity)
+# Reservation.java (Entity)
 
-    @PreUpdate
-    public void onPreUpdate(){
+    @PostPersist
+    public void onPostPersist(){
+    
+        //------------------
+        // 예약이 들어온 경우
+        //------------------
 
-        bomtada.external.Review review = new bomtada.external.Review();
+        // 해당 Storage가 Available한 상태인지 체크
+       boolean result = ReservationApplication.applicationContext.getBean(storagerent.external.StorageService.class).chkAndReqReserve(this.getStorageId());
+        System.out.println("######## Storage Available Check Result : " + result);
+        
+        if(result) { 
 
-        review.setClaimId(getId());
-        review.setStatus("Canceled Review");
+            // 예약 가능한 상태인 경우(Available)
 
-        boolean rslt = ClaimApplication.applicationContext.getBean(bomtada.external.ReviewService.class)
-            .cancelReview(review);
+            //----------------------------
+            // PAYMENT 결제 진행 (POST방식)
+            //----------------------------
+            storagerent.external.Payment payment = new storagerent.external.Payment();
+            payment.setReservationId(this.getReservationId());
+            payment.setStorageId(this.getStorageId());
+            payment.setPaymentStatus("paid");
+            payment.setPrice(this.price);
+            ReservationApplication.applicationContext.getBean(storagerent.external.PaymentService.class)
+                .approvePayment(payment);
 
-        if (rslt) {
-            ClaimCanceled claimCanceled = new ClaimCanceled();
-            BeanUtils.copyProperties(this, claimCanceled);
-            claimCanceled.publishAfterCommit();
+            //----------------------------------
+            // 이벤트 발행 --> ReservationCreated
+            //----------------------------------
+            ReservationCreated reservationCreated = new ReservationCreated();
+            BeanUtils.copyProperties(this, reservationCreated);
+            reservationCreated.publishAfterCommit();
         }
-
     }
 ```
 
-- 동기식 호출에서는 호출 시간에 따른 타임 커플링이 발생하며, 결제 시스템이 장애가 나면 청약신청도 못받는다는 것을 확인:
+- 동기식 호출에서는 호출 시간에 따른 타임 커플링이 발생하며, 결제 시스템이 장애가 나면 주문도 못받는다는 것을 확인:
 
 
 ```
-# 결제(payment) 서비스를 잠시 내려놓음 (ctrl+c)
+# 결제 (pay) 서비스를 잠시 내려놓음 (ctrl+c)
 
-# 청구취소 처리
-http PUT http://localhost:8081/claims/1 customerId=1 price=500 status="Canceled Claim" claimDt=1622641792891 #Fail
+# 대여창고 등록
+http POST http://localhost:8088/storages description="storage1" price=200000 storageStatus="available"
+
+# Payment 서비스 종료 후 창고대여
+http POST localhost:8088/reservations storageId=1 price=200000 reservationStatus="reqReserve"
+
+# Payment 서비스 실행 후 창고대여
+http POST localhost:8088/reservations storageId=1 price=200000 reservationStatus="reqReserve"
+
+# 창고대여 확인 
+http GET http://localhost:8088/reservations/1  
 ```
-![image](https://user-images.githubusercontent.com/24379176/120586594-c5dd6680-c46e-11eb-9cc6-8856f1f7bfd8.png)
-
-```
-# 심사(review) 서비스 재기동
-cd review
-mvn spring-boot:run
-
-# h2 사용으로 심사 수동 생성 필요
-http POST http://localhost:8082/reviews claimId=1 examinerId=101 customerId=1 price=500 status="Assigned Examiner" reviewDt=1622635791863
-
-# 청구취소 처리
-http PUT http://localhost:8081/claims/1 customerId=1 price=500 status="Canceled Claim" claimDt=1622641792891 #Success
-```
-![image](https://user-images.githubusercontent.com/24379176/120586585-c1b14900-c46e-11eb-8960-f532e45701b9.png)
 
 - 또한 과도한 요청시에 서비스 장애가 도미노 처럼 벌어질 수 있다. (서킷브레이커, 폴백 처리는 운영단계에서 설명한다.)
 
@@ -421,745 +638,241 @@ http PUT http://localhost:8081/claims/1 customerId=1 price=500 status="Canceled 
 ## 비동기식 호출 / 시간적 디커플링 / 장애격리 / 최종 (Eventual) 일관성 테스트
 
 
-심사가 승인된 후에 지급 시스템으로 이를 알려주는 행위는 동기식이 아니라 비 동기식으로 처리하여 지급 시스템의 처리를 위하여 심사접수가 블로킹 되지 않아도록 처리한다.
+결제가 이루어진 후에 숙소 시스템의 상태가 업데이트 되고, 예약 시스템의 상태가 업데이트 되며, 예약 및 취소 메시지가 전송되는 시스템과의 통신 행위는 비동기식으로 처리한다.
  
-- 이를 위하여 심사이력에 기록을 남긴 후에 곧바로 심사승인이 되었다는 도메인 이벤트를 카프카로 송출한다(Publish)
+- 이를 위하여 결제가 승인되면 결제가 승인 되었다는 이벤트를 카프카로 송출한다. (Publish)
  
 ```
-package bomtada;
+# Payment.java
+
+package storagerent;
+
+import javax.persistence.*;
+import org.springframework.beans.BeanUtils;
 
 @Entity
-@Table(name="Review_table")
-public class Review {
+@Table(name="Payment_table")
+public class Payment {
 
- ...
+    ....
+
+    @PostPersist
+    public void onPostPersist(){
+        ////////////////////////////
+        // 결제 승인 된 경우
+        ////////////////////////////
+
+        // 이벤트 발행 -> PaymentApproved
+        PaymentApproved paymentApproved = new PaymentApproved();
+        BeanUtils.copyProperties(this, paymentApproved);
+        paymentApproved.publishAfterCommit();
+    }
+    
+    ....
+}
+```
+
+- 예약 시스템에서는 결제 승인 이벤트에 대해서 이를 수신하여 자신의 정책을 처리하도록 PolicyHandler 를 구현한다:
+
+```
+# Reservation.java
+
+package storagerent;
+
     @PostUpdate
     public void onPostUpdate(){
-        ReviewApproved reviewApproved = new ReviewApproved();
-        BeanUtils.copyProperties(this, reviewApproved);
-        reviewApproved.publishAfterCommit();
-    }
+    
+        ....
 
-}
-```
-- 지급 서비스에서는 심사승인 이벤트에 대해서 이를 수신하여 자신의 정책을 처리하도록 PolicyHandler 를 구현한다:
+        if("reserved".equals(this.getReservationStatus())) {
 
-```
-package bomtada;
+            ////////////////////
+            // 예약 확정된 경우
+            ////////////////////
 
-...
-
-@Service
-public class PolicyHandler{
-
-    @StreamListener(KafkaProcessor.INPUT)
-    public void wheneverReviewApproved_AssignPayment(@Payload ReviewApproved reviewApproved){
-
-        if(!reviewApproved.validate()) return;
-
-        System.out.println("\n\n##### listener AssignPayment : " + reviewApproved.toJson() + "\n\n");
+            // 이벤트 발생 --> ReservationConfirmed
+            ReservationConfirmed reservationConfirmed = new ReservationConfirmed();
+            BeanUtils.copyProperties(this, reservationConfirmed);
+            reservationConfirmed.publishAfterCommit();
+        }
         
-        # 심사승인 처리가 되었으니 지급접수를 한다.
-        Payment payment = new Payment();
-        payment.setCustomerId(reviewApproved.getCustomerId());
-        payment.setContId(reviewApproved.getContId());
-        payment.setPrice(reviewApproved.getPrice());
-        payment.setStatus("Assigned Payment");
-        payment.setPaymentDt(new Date());
-        payment.setClaimId(reviewApproved.getClaimId());
-        paymentRepository.save(payment);
+        ....
+        
     }
 
-}
 ```
 
-지급 시스템은 청구/심사와 완전히 분리되어있으며, 이벤트 수신에 따라 처리되기 때문에, 지급 시스템이 유지보수로 인해 잠시 내려간 상태라도 청구/심사 진행에 문제가 없다:
-```
-# 지급 서비스 (payment) 를 잠시 내려놓음 (ctrl+c)
-
-# 심사승인 처리
-http PUT http://localhost:8082/reviews/1 claimId=1 examinerId=101 customerId=1 contId=80001 price=450 status="Approved Review" reviewDt=1622635799999   #Success
-
-# 심사이력 확인
-http http://localhost:8082/reviews    # Approved Review 확인
-```
-![image](https://user-images.githubusercontent.com/24379176/120589427-cb897b00-c473-11eb-8aed-e71816514cca.png)
+그 외 메시지 서비스는 예약/결제와 완전히 분리되어있으며, 이벤트 수신에 따라 처리되기 때문에, 메시지 서비스가 유지보수로 인해 잠시 내려간 상태 라도 예약을 받는데 문제가 없다.
 
 ```
-# 지급 서비스 기동
-cd payment
-mvn spring-boot:run
+# 메시지 서비스 (message) 를 잠시 내려놓음 (ctrl+c)
 
-# 지급이력 확인
-http http://localhost:8083/payments     # Assigned Payment 확인
+# 대여창고 등록
+http POST http://localhost:8088/storages description="msg1" price=200000 storageStatus="available"
+
+# Message 서비스 종료 후 창고대여
+http POST localhost:8088/reservations storageId=5 price=200000 reservationStatus="reqReserve"   
+
+# Message 서비스와 상관없이 창고대여 성공여부 확인
+http GET http://localhost:8088/reservations/2
+
 ```
-![image](https://user-images.githubusercontent.com/24379176/120589436-cf1d0200-c473-11eb-9f4c-ab8d394d651b.png)
-
-## Gateway
-Gateway를 통해 마이크로 서비스들의 진입점을 통일하였다.
-
+## 폴리그랏 퍼시스턴스 적용
 ```
-# (gateway) application.yml
-
-server:
-  port: 8088
-
----
-
-spring:
-  profiles: default
-  cloud:
-    gateway:
-      routes:
-        - id: claim
-          uri: http://localhost:8081
-          predicates:
-            - Path=/claims/**
-        - id: review
-          uri: http://localhost:8082
-          predicates:
-            - Path=/reviews/** 
-        - id: payment
-          uri: http://localhost:8083
-          predicates:
-            - Path=/payments/** 
-        - id: history
-          uri: http://localhost:8084
-          predicates:
-            - Path=/history/**
-      globalcors:
-        corsConfigurations:
-          '[/**]':
-            allowedOrigins:
-              - "*"
-            allowedMethods:
-              - "*"
-            allowedHeaders:
-              - "*"
-            allowCredentials: true
-
-
----
-
-spring:
-  profiles: docker
-  cloud:
-    gateway:
-      routes:
-        - id: claim
-          uri: http://claim:8080
-          predicates:
-            - Path=/claims/**
-        - id: review
-          uri: http://review:8080
-          predicates:
-            - Path=/reviews/** 
-        - id: payment
-          uri: http://payment:8080
-          predicates:
-            - Path=/payments/** 
-        - id: history
-          uri: http://history:8080
-          predicates:
-            # - Path=/claimHistories/** /progressPages/**
-            - Path=/history/**
-      globalcors:
-        corsConfigurations:
-          '[/**]':
-            allowedOrigins:
-              - "*"
-            allowedMethods:
-              - "*"
-            allowedHeaders:
-              - "*"
-            allowCredentials: true
-
-server:
-  port: 8080
+Message Sevices : hsqldb사용
 ```
+![image](https://user-images.githubusercontent.com/84304043/122845081-dda55d80-d33d-11eb-8d9f-a4e17735574e.png)
 ```
-# 서비스 호출 테스트
-
-http http://localhost:8088/claims     #Success
-http http://localhost:8088/reviews    #Success
-http http://localhost:8088/payments   #Success
-http http://localhost:8088/history    #Success
+Message이외  Sevices : h2db사용
 ```
+![image](https://user-images.githubusercontent.com/84304043/122845106-ed24a680-d33d-11eb-9124-aed5d9e7285b.png)
 
-
-## CQRS
-
-커맨드 (Create - Insert, Update, Delete : 데이터를 변경) 와 쿼리 (Select - Read : 데이터를 조회)의 책임을 분리한다.
-각각의 서비스에서 발생하는 CUD는 서비스 내에서 처리하며, Read는 이벤트 소싱을 통해 history 서비스에서 확인 할 수 있다.
-
-* 고객이 자주 진행상태보기 화면에서 진행상태를 확인할 수 있어야 한다.
-
-전체 이력 조회
-
-![image](https://user-images.githubusercontent.com/24379176/120595209-fc21e280-c47c-11eb-89b3-928829e0ea73.png)
-
-고객별 청구이력 조회
-
-![image](https://user-images.githubusercontent.com/24379176/120595912-127c6e00-c47e-11eb-92d1-3e0a133ae9a5.png)
-
-## Correlation
-
-서비스를 이용해 만들어진 각 이벤트 건은 Correlation-key 연결을 통해 식별이 가능하다.
-* Correlation-key로 식별하여 '보험금청구접수됨' 이벤트를 통해 생성된 '심사접수' 건에 대해 '보험금청구취소' 시 동일한 Correlation-key를 가지는 심사 건이 취소되는 모습을 확인한다: (FeignClient 설명부분 참고)
-
-진행상태보기 화면에서 Correlation-key인 claim_id로 조회
-
-![image](https://user-images.githubusercontent.com/24379176/120595929-15775e80-c47e-11eb-8319-86037598f983.png)
-
+## Maven 빌드시스템 라이브러리 추가( pom.xml 설정변경 H2DB → HSQLDB) 
+![image](https://user-images.githubusercontent.com/84304043/122845179-0fb6bf80-d33e-11eb-879a-1e6e8964ebb3.png)
 
 # 운영
 
+
 ## CI/CD 설정
 
+각 구현체들은 각자의 source repository 에 구성되었고, 사용한 CI/CD는 buildspec.yml을 이용한 AWS codebuild를 사용하였습니다.
 
-* 각 구현체들은 github의 source repository에 구성
-* Image repository는 ECR 사용
-* yaml파일 기반의 Code Deploy
+- CodeBuild 프로젝트를 생성하고 AWS_ACCOUNT_ID, KUBE_URL, KUBE_TOKEN 환경 변수 세팅을 한다
 ```
-# application deploy
-
-cd insurance-claim/yaml
-
-kubectl apply -f configmap.yaml
-
-kubectl apply -f gateway.yaml
-kubectl apply -f claim.yaml
-kubectl apply -f review.yaml
-kubectl apply -f payment.yaml
-kubectl apply -f history.yaml
-kubectl apply -f consumer.yaml
+SA 생성
+kubectl apply -f eks-admin-service-account.yml
 ```
-![image](https://user-images.githubusercontent.com/24379176/120727424-78680480-c515-11eb-860b-93786dbca456.png)
+![image](https://user-images.githubusercontent.com/84304043/122844500-c154f100-d33c-11eb-9ec0-5eb0fa3540d6.png)
+```
+Role 생성
+kubectl apply -f eks-admin-cluster-role-binding.yml
+```
+![image](https://user-images.githubusercontent.com/84304043/122844538-d6ca1b00-d33c-11eb-818b-5a51404265c1.png)
+```
+Token 확인
+kubectl -n kube-system get secret
+kubectl -n kube-system describe secret $(kubectl -n kube-system get secret | grep eks-admin | awk '{print $1}')
+```
+![image](https://user-images.githubusercontent.com/86210580/122849832-34fbfb80-d347-11eb-9f6d-b1e379b3e1cf.png)
+
+```
+buildspec.yml 파일 
+마이크로 서비스 storage의 yml 파일 이용하도록 세팅
+```
+![image](https://user-images.githubusercontent.com/84304043/122844673-201a6a80-d33d-11eb-8a52-a0fad02951d9.png)
+
+- codebuild 실행
+```
+codebuild 프로젝트 및 빌드 이력
+```
+![image](https://user-images.githubusercontent.com/84304043/122846416-bdc36900-d340-11eb-9558-cad08d2615f2.png)
+![image](https://user-images.githubusercontent.com/84304043/122861596-a2fdee00-d35a-11eb-9d73-7ff537c9e332.png)
+
+- codebuild 빌드 내역 (Message 서비스 세부)
+
+![image](https://user-images.githubusercontent.com/84304043/122846449-cd42b200-d340-11eb-8a33-aeff63915d61.png)
+
+- codebuild 빌드 내역 (전체 이력 조회)
+
+![image](https://user-images.githubusercontent.com/84304043/122846462-d5025680-d340-11eb-9914-b12b82a74ff5.png)
+
 
 
 ## 동기식 호출 / 서킷 브레이킹 / 장애격리
 
-* 서킷 브레이킹 프레임워크의 선택: Spring FeignClient + Hystrix 옵션을 사용하여 구현함
+* 서킷 브레이킹: Hystrix 사용하여 구현함
 
-시나리오는 청구취소(claim)-->심사취소(review) 시의 연결을 RESTful Request/Response 로 연동하여 구현이 되어있고, 청구취소 요청이 과도할 경우 CB 를 통하여 장애격리.
+시나리오는 예약(reservation)--> 창고(storage) 시의 연결을 RESTful Request/Response 로 연동하여 구현이 되어있고, 예약 요청이 과도할 경우 CB 를 통하여 장애격리.
 
-- Hystrix 를 설정:  요청처리 쓰레드에서 처리시간이 610 밀리가 넘어서기 시작하여 어느정도 유지되면 CB 회로가 닫히도록 (요청을 빠르게 실패처리, 차단) 설정
-```
-# (claim) application.yml
+![image](https://user-images.githubusercontent.com/84304043/122866912-b6618700-d363-11eb-8247-dae264aa6fdf.png)
 
-feign:
-  hystrix:
-    enabled: true
-    
-hystrix:
-  command:
-    # 전역설정
-    default:
-      execution.isolation.thread.timeoutInMilliseconds: 610
+
+* 부하테스터 siege 툴을 통한 서킷 브레이커 동작 확인: siege 실행 하였으나 storagerent 부하가 생성되지 않음.
 
 ```
-
-- 피호출 서비스(심사:review) 의 임의 부하 처리 - 400 밀리에서 증감 220 밀리 정도 왔다갔다 하게
+kubectl run siege --image=apexacme/siege-nginx -n storagerent
+kubectl exec -it siege -c siege -n storagerent -- /bin/bash
 ```
-# (review) ReviewController.java
+- Jmeter 로 부하 테스트 하였으나 실패건이 3%로 나오는것확인 -> 하지만 Jmeter 테스트와 연결해서 CB결과를 보여줘야할지 모르겠음.
 
-    @RequestMapping(value = "/cancelReview",
-                    method = RequestMethod.POST,
-                    produces = "application/json;charset=UTF-8")
-    public boolean cancelReview(@RequestBody Review review) throws Exception {
-
-        ...
-        
-        try {
-            Thread.currentThread().sleep((long) (400 + Math.random() * 220));
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-    }
-```
-
-- siege 툴에서 PUT 방식은 사용할 수 없어 기존에 feignClient를 호출하는 cancelClaim 이벤트를 POST로 받도록 변경하였다.
-```
-# (claim) ClaimController.java
-
-@Transactional
-@RestController
-public class ClaimController {
-private static Logger log = LoggerFactory.getLogger(ClaimController.class);
-
-@Autowired
-ClaimRepository claimRepository;
-
-@RequestMapping(value = "/claims/{claimId}",
-                method = RequestMethod.POST,
-                produces = "application/json;charset=UTF-8")
-public Claim cancelClaim(@PathVariable Long claimId, @RequestBody Claim claim) throws Exception {
-    log.info("### cancelClaim called ###");
-
-        ...
-        
-    return claim;
-}
-```
-
-* 부하테스터 siege 툴을 통한 서킷 브레이커 동작 확인:
-- 동시사용자 100명
-- 60초 동안 실시
-
-```
-# 청구 생성
-http POST http://localhost:8081/claims customerId=6 price=50000 status="Received Claim" claimDt=1622636792891
-
-# 청구 취소 부하테스트
-$ siege -c100 -t60S -r10 --content-type "application/json" 'http://localhost:8081/claims/1 POST {"customerId":6, "price":50000, "status":"Canceled Claim", "claimDt":1622641792891}'
-
-** SIEGE 4.0.5
-** Preparing 100 concurrent users for battle.
-The server is now under siege...
-
-HTTP/1.1 200     1.22 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     1.25 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     1.22 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     1.28 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     1.28 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     1.32 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     1.54 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     1.58 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     1.61 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     1.70 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     1.71 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     1.77 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     1.76 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-
-* 요청이 과도하여 CB를 동작함 요청을 차단
-
-HTTP/1.1 500     1.82 secs:     192 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     1.77 secs:     216 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     1.76 secs:     216 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     1.76 secs:     216 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     1.75 secs:     216 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     1.76 secs:     216 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     1.76 secs:     216 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     1.76 secs:     216 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     1.74 secs:     216 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     1.75 secs:     216 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     1.86 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     1.87 secs:     192 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     1.69 secs:     216 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     1.70 secs:     216 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     1.45 secs:     216 bytes ==> POST http://localhost:8081/claims/1
-
-* 요청을 어느정도 돌려보내고나니, 기존에 밀린 일들이 처리되었고, 회로를 닫아 요청을 다시 받기 시작
-
-HTTP/1.1 200     2.03 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     2.03 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     2.07 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     2.09 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     2.13 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     2.19 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     2.22 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     2.19 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     2.30 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     1.85 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     2.01 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     2.04 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     2.05 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     2.07 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     2.09 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     2.17 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     2.22 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-
-* 다시 요청이 쌓이기 시작하여 건당 처리시간이 610 밀리를 살짝 넘기기 시작 => 회로 열기 => 요청 실패처리
-
-HTTP/1.1 200     3.64 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     3.75 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     3.77 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     3.80 secs:     192 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     3.77 secs:     216 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     3.77 secs:     216 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     3.77 secs:     216 bytes ==> POST http://localhost:8081/claims/1
-
-* 생각보다 빨리 상태 호전됨 - (건당 (쓰레드당) 처리시간이 610 밀리 미만으로 회복) => 요청 수락
-
-HTTP/1.1 200     3.79 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     3.82 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     3.85 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     3.88 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     3.99 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     3.99 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     4.17 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     4.21 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     4.23 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     4.23 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     4.32 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-
-* 이후 이러한 패턴이 계속 반복되면서 시스템은 도미노 현상이나 자원 소모의 폭주 없이 잘 운영됨
+![image](https://user-images.githubusercontent.com/84304043/122867174-10fae300-d364-11eb-8ab4-a2dbc6395f75.png)
+![image](https://user-images.githubusercontent.com/84304043/122867281-31c33880-d364-11eb-9854-587ebade3a5b.png)
 
 
-HTTP/1.1 500     4.18 secs:     192 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     4.12 secs:     192 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     4.21 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     4.22 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     4.24 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     4.40 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     4.40 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     4.53 secs:     192 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     4.28 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     4.35 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     4.37 secs:     192 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     4.38 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     4.24 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     4.32 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     4.44 secs:     192 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 500     3.91 secs:     216 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     4.43 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-HTTP/1.1 200     4.42 secs:     104 bytes ==> POST http://localhost:8081/claims/1
-
-
-:
-
-Lifting the server siege...
-Transactions:		        1042 hits
-Availability:		       65.17 %
-Elapsed time:		       59.57 secs
-Data transferred:	        0.21 MB
-Response time:		        5.48 secs
-Transaction rate:	       17.49 trans/sec
-Throughput:		        0.00 MB/sec
-Concurrency:		       95.89
-Successful transactions:        1042
-Failed transactions:	         557
-Longest transaction:	        8.30
-Shortest transaction:	        0.01
- 
-```
-- 운영시스템은 죽지 않고 지속적으로 CB 에 의하여 적절히 회로가 열림과 닫힘이 벌어지면서 자원을 보호하고 있음을 보여줌. 하지만, 65.17% 가 성공하였고, 35%가 실패했다는 것은 고객 사용성에 있어 좋지 않기 때문에 Retry 설정과 동적 Scale out (replica의 자동적 추가,HPA) 을 통하여 시스템을 확장 해주는 후속처리가 필요.
-
-
-## 오토스케일 아웃
-
+### 오토스케일 아웃
 앞서 CB 는 시스템을 안정되게 운영할 수 있게 해줬지만 사용자의 요청을 100% 받아들여주지 못했기 때문에 이에 대한 보완책으로 자동화된 확장 기능을 적용하고자 한다. 
 
+- storage deployment.yml 파일에 resources 설정을 추가한다
 
-- 심사서비스에 대한 replica 를 동적으로 늘려주도록 HPA 를 설정한다. 설정은 CPU 사용량이 3프로를 넘어서면 replica 를 10개까지 늘려준다:
+![image](https://user-images.githubusercontent.com/84304043/122850814-d6378180-d348-11eb-9cd2-eb0873f1c8d7.png)
+
+- storage 서비스에 대한 replica 를 동적으로 늘려주도록 HPA 를 설정한다. 설정은 CPU 사용량이 50프로를 넘어서면 replica 를 10개까지 늘려준다. (X, 오류 발생)
 ```
-kubectl autoscale deploy review --min=1 --max=10 --cpu-percent=3 -n bomtada
-```
-- 심사서비스 배포시 yaml에 resource limit 설정을 추가 적용한다:
-```
-    spec:
-      containers:
-          ...
-          resources:
-            limits:
-              cpu: 500m
-            requests:
-              cpu: 200m
+kubectl autoscale deployment storage -n storagerent --cpu-percent=50 --min=1 --max=10
 ```
 
-- CB 에서 했던 방식대로 워크로드를 2분 동안 걸어준다.
+- 부하를 동시사용자 100명, 1분 동안 걸어준다.(X)
 ```
-siege -c100 -t120S -r10 --content-type "application/json" 'http://claim:8080/claims/1 POST {"customerId":6, "price":50000, "status":"Canceled Claim", "claimDt":1622641792891}'
+siege -c100 -t60S -v --content-type "application/json" 'http://storage:8080/storages POST {"desc": "BigStorage"}'
 ```
-- 오토스케일이 어떻게 되고 있는지 모니터링을 걸어둔다:
+- 오토스케일이 어떻게 되고 있는지 모니터링을 걸어둔다 (X)
 ```
-kubectl get deploy review -w -n bomtada
+kubectl get deploy storage -w -n storagerent 
 ```
-- 어느정도 시간이 흐른 후 (약 30초) 스케일 아웃이 벌어지는 것을 확인할 수 있다:
-```
-NAME     READY   UP-TO-DATE   AVAILABLE   AGE
-review   1/1     1            1           5m
-review   1/4     1            1           8m13s
-review   1/4     1            1           8m13s
-review   1/4     1            1           8m13s
-review   1/4     4            1           8m13s
-review   1/7     4            1           8m28s
-review   1/7     4            1           8m28s
-review   1/7     4            1           8m28s
-review   1/7     7            1           8m28s
-review   1/10    7            1           8m43s
-review   1/10    7            1           8m43s
-review   1/10    7            1           8m44s
-review   1/10    10           1           8m44s
-review   2/10    10           2           9m42s
-review   3/10    10           3           9m42s
-review   4/10    10           4           9m42s
-review   5/10    10           5           9m56s
-review   6/10    10           6           9m57s
-review   7/10    10           7           9m57s
-review   8/10    10           8           10m
-review   9/10    10           9           10m
-review   10/10   10           10          10m
-```
-- siege 의 로그를 보아도 전체적인 성공률이 높아진 것을 확인 할 수 있다. 
-```
-Transactions:                  17626 hits
-Availability:                  96.47 %
-Elapsed time:                 119.06 secs
-Data transferred:               1.86 MB
-Response time:                  0.67 secs
-Transaction rate:             148.04 trans/sec
-Throughput:                     0.02 MB/sec
-Concurrency:                   99.42
-Successful transactions:       17626
-Failed transactions:             645
-Longest transaction:            4.15
-Shortest transaction:           0.00
-```
+- 어느정도 시간이 흐른 후 (약 30초) 스케일 아웃이 벌어지는 것을 확인할 수 있다:(X)
+
+- siege 의 로그를 보아도 전체적인 성공률이 높아진 것을 확인 할 수 있다. (X)
 
 
 ## 무정지 재배포
 
 * 먼저 무정지 재배포가 100% 되는 것인지 확인하기 위해서 Autoscaler 이나 CB 설정을 제거함
 
-- seige 로 배포작업 직전에 워크로드를 모니터링 함.
 ```
-siege -c1 -v -t300s -r10 --content-type "application/json" 'http://payment:8080/payments'
-
-** SIEGE 4.0.5
-** Preparing 100 concurrent users for battle.
-The server is now under siege...
-
-HTTP/1.1 200     0.00 secs:     354 bytes ==> GET  /payments
-HTTP/1.1 200     0.02 secs:     354 bytes ==> GET  /payments
-:
-
+kubectl delete destinationrules dr-storage -n storagerent
+kubectl delete hpa storage -n storagerent
 ```
 
-- 새버전으로의 배포 시작
+- seige 로 배포작업 직전에 워크로드를 모니터링 함(에러발생)
 ```
-kubectl apply -f payment_na.yaml  # Readiness Probe 미설정 버전
-
-NAME                           READY   STATUS        RESTARTS   AGE
-pod/claim-956c9b89d-m6jg6      1/1     Running       0          31m
-pod/gateway-78678646b-fgwms    1/1     Running       0          31m
-pod/payment-859c66dbd4-m7pnj   0/1     Terminating   0          5m31s
-pod/payment-868dd9c698-wvb22   1/1     Running       0          3s
-pod/review-67b6fb4948-qcqrk    1/1     Running       0          31m
-...
-
+siege -c100 -t60S -r10 -v --content-type "application/json" 'http://storage:8080/storages POST {"desc": "BigStorage"}'
 ```
 
-- seige 의 화면으로 넘어가서 Availability 가 100% 미만으로 떨어졌는지 확인
+- 새버전으로의 배포 시작(X)
 ```
-Transactions:                   3134 hits
-Availability:                  75.37 %
-Elapsed time:                  17.65 secs
-Data transferred:               1.06 MB
-Response time:                  0.01 secs
-Transaction rate:             177.56 trans/sec
-Throughput:                     0.06 MB/sec
-Concurrency:                    0.91
-Successful transactions:        3134
-Failed transactions:            1024
-Longest transaction:            0.52
-Shortest transaction:           0.00
-
-```
-배포기간중 Availability 가 평소 100%에서 75% 로 떨어지는 것을 확인. 원인은 쿠버네티스가 성급하게 새로 올려진 서비스를 READY 상태로 인식하여 서비스 유입을 진행한 것이기 때문. 이를 막기위해 Readiness Probe 를 설정함:
-
-```
-kubectl apply -f payment.yaml  # Readiness Probe 설정 버전
-
-NAME                           READY   STATUS        RESTARTS   AGE
-pod/claim-956c9b89d-m6jg6      1/1     Running       0          38m
-pod/gateway-78678646b-fgwms    1/1     Running       0          38m
-pod/payment-859c66dbd4-csxpm   1/1     Running       0          39s
-pod/payment-868dd9c698-wvb22   0/1     Terminating   0          7m12s
-pod/review-67b6fb4948-qcqrk    1/1     Running       0          38m
-...
-
+kubectl set image ...
 ```
 
-- 동일한 시나리오로 재배포 한 후 Availability 확인:
-```
-Transactions:                 109148 hits
-Availability:                 100.00 %
-Elapsed time:                 299.56 secs
-Data transferred:              36.85 MB
-Response time:                  0.00 secs
-Transaction rate:             364.36 trans/sec
-Throughput:                     0.12 MB/sec
-Concurrency:                    0.96
-Successful transactions:      109148
-Failed transactions:               0
-Longest transaction:            1.05
-Shortest transaction:           0.00
+- seige 의 화면으로 넘어가서 Availability 가 100% 미만으로 떨어졌는지 확인(X)
 
 ```
-
-배포기간 동안 Availability 가 변화없기 때문에 무정지 재배포가 성공한 것으로 확인됨.
-
-
-## Self-healing (Liveness Probe)
-
-- 메모리 과부하를 발생시키는 API를 payment 서비스에 추가하여, 임의로 서비스가 동작하지 않는 상황을 만든다. 그 후 LivenessProbe 설정에 의하여 자동으로 서비스가 재시작되는지 확인한다.
-```
-# (payment) PaymentController.java
-
-@RestController
-public class PaymentController {
-
-    @GetMapping("/callmemleak")
-    public void callMemLeak() {
-    try {
-        this.memLeak();
-    } catch (Exception e) {
-        e.printStackTrace();
-    }
-    }
-
-    public void memLeak() throws NoSuchFieldException, ClassNotFoundException, IllegalAccessException {
-        Class unsafeClass = Class.forName("sun.misc.Unsafe");
-        
-        Field f = unsafeClass.getDeclaredField("theUnsafe");
-        f.setAccessible(true);
-        Unsafe unsafe = (Unsafe) f.get(null);
-        System.out.print("4..3..2..1...");
-        try {
-            for(;;)
-            unsafe.allocateMemory(1024*1024);
-        } catch(Error e) {
-            System.out.println("Boom!");
-            e.printStackTrace();
-        }
-    }
-}
-
-```
-- payment 서비스에 Liveness Probe 설정을 추가한 payment_bomb.yaml 생성
-```
-# Liveness Probe 적용
-kubectl apply -f payment_bomb.yaml
-
-# 설정 확인
-kubectl get deploy payment -n bomtada -o yaml
-
-...
-template:
-    metadata:
-      creationTimestamp: null
-      labels:
-        app: payment
-    spec:
-      containers:
-      - image: 879772956301.dkr.ecr.ap-southeast-1.amazonaws.com/user10-payment:bomb
-        imagePullPolicy: Always
-        livenessProbe:
-          failureThreshold: 5
-          httpGet:
-            path: /actuator/health
-            port: 8080
-            scheme: HTTP
-          initialDelaySeconds: 120
-          periodSeconds: 5
-          successThreshold: 1
-          timeoutSeconds: 2
-        name: payment
-        ports:
-        - containerPort: 8080
-...
-
-```
-- 메모리 과부하 발생
-```
-kubectl exec -it siege -n bomtada -- /bin/bash
-
-# 메모리 과부하 API 호출
-http http://payment:8080/callmemleak
-
-# pod 상태 확인
-kubectl get po -w -n bomtada
-
-NAME                       READY   STATUS    RESTARTS   AGE
-claim-956c9b89d-m6jg6      1/1     Running   0          127m
-gateway-78678646b-fgwms    1/1     Running   0          127m
-payment-5b7444449f-mp4kf   1/1     Running   0          9m42s
-review-67b6fb4948-qcqrk    1/1     Running   0          127m
-siege                      1/1     Running   0          128m
-payment-5b7444449f-mp4kf   0/1     OOMKilled   0          10m
-payment-5b7444449f-mp4kf   1/1     Running     1          10m
-```
-- pod 상태 확인을 통해 payment서비스의 RESTARTS 횟수가 증가한 것을 확인할 수 있다.
-
-## ConfigMap 사용
-
-시스템별로 또는 운영중에 동적으로 변경 가능성이 있는 설정들을 ConfigMap을 사용하여 관리합니다.
-
-* configmap.yaml
-```
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: bomtada-config
-  namespace: bomtada
-data:
-  api.url.review: http://review:8080
+siege -c100 -t60S -r10 -v --content-type "application/json" 'http://storage:8080/storages POST {"desc": "BigStorage"}'
 ```
 
-* claim.yaml (ConfigMap 사용)
+- 배포기간중 Availability 가 평소 100%에서 87% 대로 떨어지는 것을 확인. 원인은 쿠버네티스가 성급하게 새로 올려진 서비스를 READY 상태로 인식하여 서비스 유입을 진행한 것이기 때문. 이를 막기위해 Readiness Probe 를 설정함
+
 ```
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: claim
-  namespace: bomtada
-  labels:
-    app: claim
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: claim
-  template:
-    metadata:
-      labels:
-        app: claim
-    spec:
-      containers:
-        - name: claim
-          image: 879772956301.dkr.ecr.ap-southeast-1.amazonaws.com/user10-claim:latest
-          imagePullPolicy: Always
-          ports:
-            - containerPort: 8080
-          env:
-            - name: api.url.review
-              valueFrom:
-                configMapKeyRef:
-                  name: bomtada-config
-                  key: api.url.review
+# deployment.yaml 의 readiness probe 의 설정:
 ```
 
-* kubectl describe pod/claim-7fdc457d8d-sx7mr -n bomtada
+![image](https://user-images.githubusercontent.com/84304043/122858339-156bcf80-d355-11eb-9d1a-91da438ac905.png)
+
+
 ```
-Name:         claim-7fdc457d8d-sx7mr
-Namespace:    bomtada
-Priority:     0
-Node:         ip-192-168-54-112.ap-southeast-1.compute.internal/192.168.54.112
-Start Time:   Fri, 04 Jun 2021 00:09:22 +0000
-Labels:       app=claim
-              pod-template-hash=7fdc457d8d
-Annotations:  kubernetes.io/psp: eks.privileged
-Status:       Running
-IP:           192.168.44.143
-IPs:
-  IP:           192.168.44.143
-Controlled By:  ReplicaSet/claim-7fdc457d8d
-Containers:
-  claim:
-    Container ID:   docker://3d47bc47a32d9039a555cf56394fb3ad7da6a1e8827b56a7392f639f515a32ce
-    Image:          879772956301.dkr.ecr.ap-southeast-1.amazonaws.com/user10-claim:latest
-    Image ID:       docker-pullable://879772956301.dkr.ecr.ap-southeast-1.amazonaws.com/user10-claim@sha256:156d492bdb8159ba34b2cd4111896caa9e3441995107b4a0038c0e44811a56fd
-    Port:           8080/TCP
-    Host Port:      0/TCP
-    State:          Running
-      Started:      Fri, 04 Jun 2021 00:09:23 +0000
-    Ready:          True
-    Restart Count:  0
-    Liveness:       http-get http://:8080/actuator/health delay=120s timeout=2s period=5s #success=1 #failure=5
-    Readiness:      http-get http://:8080/actuator/health delay=10s timeout=2s period=5s #success=1 #failure=10
-    Environment:
-      api.url.review:  <set to the key 'api.url.review' of config map 'bomtada-config'>  Optional: false
-    Mounts:
-      /var/run/secrets/kubernetes.io/serviceaccount from default-token-pmvj6 (ro)
+kubectl apply -f kubernetes/deployment.yml
 ```
+
+- 동일한 시나리오로 재배포 한 후 Availability 확인(X)
+
+
+# Self-healing (Liveness Probe)
+- storage deployment.yml 파일 수정 
+```
+콘테이너 실행 후 /tmp/healthy 파일을 만들고 
+90초 후 삭제
+livenessProbe에 'cat /tmp/healthy'으로 검증하도록 함
+```
+![image](https://user-images.githubusercontent.com/84304043/122863309-80210900-d35d-11eb-8e07-8113c4ca6af9.png)
+
+- kubectl describe pod storage -n storagerent 실행으로 확인(X)
+
