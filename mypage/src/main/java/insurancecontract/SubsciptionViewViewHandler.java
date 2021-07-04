@@ -17,6 +17,10 @@ public class SubsciptionViewViewHandler {
     @Autowired
     private SubsciptionViewRepository subsciptionViewRepository;
 
+    
+    ///////////////////////////////////////////////////
+    /// 보험가입-청약이 신청되었을 때 INSERT -> subscriptionView table
+    ///////////////////////////////////////////////////
     @StreamListener(KafkaProcessor.INPUT)
     public void whenSubscriptionCreated_then_CREATE_1 (@Payload SubscriptionCreated subscriptionCreated) {
         try {
@@ -38,6 +42,7 @@ public class SubsciptionViewViewHandler {
     }
 
 
+ 
     @StreamListener(KafkaProcessor.INPUT)
     public void whenSubscriptionCancelled_then_UPDATE_1(@Payload SubscriptionCancelled subscriptionCancelled) {
         try {
@@ -56,6 +61,7 @@ public class SubsciptionViewViewHandler {
             e.printStackTrace();
         }
     }
+
     @StreamListener(KafkaProcessor.INPUT)
     public void whenPaymentApproved_then_UPDATE_2(@Payload PaymentApproved paymentApproved) {
         try {
@@ -96,6 +102,9 @@ public class SubsciptionViewViewHandler {
             e.printStackTrace();
         }
     }
+    ///////////////////////////////////////////////////
+    /// 청약 접수되어 심사자가 배정되었을 때 UPDATE -> subscriptionView table
+    ///////////////////////////////////////////////////
     @StreamListener(KafkaProcessor.INPUT)
     public void whenUnderwriterAssignned_then_UPDATE_4(@Payload UnderwriterAssignned underwriterAssignned) {
         try {
