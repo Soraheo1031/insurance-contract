@@ -203,9 +203,6 @@
 분석/설계 단계에서 도출된 헥사고날 아키텍처에 따라, 각 BC별로 대변되는 마이크로 서비스들을 스프링부트로 구현하였다. 구현한 각 서비스를 로컬에서 실행하는 방법은 아래와 같다 (각자의 포트넘버는 8081 ~ 808n 이다)
 
 ```
-cd gateway
-mvn spring-boot:run
-
 cd subscription
 mvn spring-boot:run
 
@@ -296,15 +293,16 @@ public interface SubscriptionRepository extends PagingAndSortingRepository<Subsc
 - 적용 후 REST API 의 테스트
 ```
 # subscription 서비스의 보험청약 접수처리
-http POST http://localhost:8088/subscriptions  subscriptionStatus="created" productName="Fisrtcancer"
+http POST http://localhost:8081/subscriptions  subscriptionStatus="created" productName="Fisrtcancer"
 
 # underwriting 서비스의 심사승인처리
-http PATCH http://localhost:8088/underwritings/1  underwritingStatus="approveSubscription"  subscriptionId=1
+http PATCH http://localhost:8083/underwritings/1  underwritingStatus="approveSubscription"  subscriptionId=1
 
 # 상태 확인
-http http://localhost:8088/subscriptions/1
-http http://localhost:8088/payments/1
-http http://localhost:8088/underwritings/1
+http http://localhost:8081/subscriptions/1
+http http://localhost:8082/payments/1
+http http://localhost:8083/underwritings/1
+http http://localhost:8084/subscriptionViews/1
 ```
 
 
@@ -348,20 +346,20 @@ if __name__ == "__main__":
 
 ## 동기식 호출 과 Fallback 처리
 
-분석단계에서의 조건 중 하나로 청구취소(ClaimCanceled)->심사취소(cancelReview) 간의 호출은 동기식 일관성을 유지하는 트랜잭션으로 처리하기로 하였다. 호출 프로토콜은 이미 앞서 Rest Repository 에 의해 노출되어있는 REST 서비스를 FeignClient 를 이용하여 호출하도록 한다. 
+분석단계에서의 조건 중 하나로 청약신청(SubscriptionCreated)->결제(approvePayment) 간의 호출은 동기식 일관성을 유지하는 트랜잭션으로 처리하기로 하였다. 호출 프로토콜은 이미 앞서 Rest Repository 에 의해 노출되어있는 REST 서비스를 FeignClient 를 이용하여 호출하도록 한다. 
 
-- 심사 서비스를 호출하기 위하여 Stub과 (FeignClient) 를 이용하여 Service 대행 인터페이스 (Proxy) 를 구현 
+- 결제 서비스를 호출하기 위하여 Stub과 (FeignClient) 를 이용하여 Service 대행 인터페이스 (Proxy) 를 구현 
 
 ```
-# (claim) ReviewService.java
+# (subscription) PaymentService.java
 
-package bomtada.external;
+package insurancecontract.external;
 
-@FeignClient(name="review", url="http://localhost:8082")//, fallback = ReviewServiceFallback.class)
-public interface ReviewService {
+@FeignClient(name="payment", url="${prop.payment.url}")
+public interface PaymentService {
 
-    @RequestMapping(method= RequestMethod.POST, path="/cancelReview")
-    public boolean cancelReview(@RequestBody Review review);
+    @RequestMapping(method= RequestMethod.GET, path="/payments")
+    public void approvePayment(@RequestBody Payment payment);
 
 }
 ```
@@ -391,11 +389,11 @@ public interface ReviewService {
     }
 ```
 
-- 동기식 호출에서는 호출 시간에 따른 타임 커플링이 발생하며, 심사 시스템이 장애가 나면 청구도 못받는다는 것을 확인:
+- 동기식 호출에서는 호출 시간에 따른 타임 커플링이 발생하며, 결제 시스템이 장애가 나면 청약신청도 못받는다는 것을 확인:
 
 
 ```
-# 심사(review) 서비스를 잠시 내려놓음 (ctrl+c)
+# 결제(payment) 서비스를 잠시 내려놓음 (ctrl+c)
 
 # 청구취소 처리
 http PUT http://localhost:8081/claims/1 customerId=1 price=500 status="Canceled Claim" claimDt=1622641792891 #Fail
