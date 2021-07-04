@@ -29,7 +29,7 @@ public class Underwriting {
     @PostUpdate
     public void onPostUpdate(){
         
-        if("underwriterAssiged".equals(this.getUnderwritingStatus())) {
+        if("approveSubscription".equals(this.getUnderwritingStatus())) {
             SubscriptionContracted subscriptionContracted = new SubscriptionContracted();
             BeanUtils.copyProperties(this, subscriptionContracted);
             subscriptionContracted.publishAfterCommit();

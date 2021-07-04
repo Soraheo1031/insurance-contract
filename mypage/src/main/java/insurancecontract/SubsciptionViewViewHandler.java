@@ -143,7 +143,7 @@ public class SubsciptionViewViewHandler {
             if( subsciptionViewOptional.isPresent()) {
                 SubsciptionView subsciptionView = subsciptionViewOptional.get();
                 // view 객체에 이벤트의 eventDirectValue 를 set 함
-                    subsciptionView.setSubscriptionStatus(subscriptionRefused.getUnderwritingStatus());
+                    subsciptionView.setSubscriptionStatus(subscriptionRefused.getSubscriptionStatus());
                 // view 레파지 토리에 save
                 subsciptionViewRepository.save(subsciptionView);
             }
@@ -179,7 +179,7 @@ public class SubsciptionViewViewHandler {
             if( subsciptionViewOptional.isPresent()) {
                 SubsciptionView subsciptionView = subsciptionViewOptional.get();
                 // view 객체에 이벤트의 eventDirectValue 를 set 함
-                    subsciptionView.setSubscriptionStatus(underwriterIdConfirmed.getSubscriptionStatus());
+                subsciptionView.setSubscriptionStatus(underwriterIdConfirmed.getSubscriptionStatus());
                 // view 레파지 토리에 save
                 subsciptionViewRepository.save(subsciptionView);
             }
@@ -191,13 +191,20 @@ public class SubsciptionViewViewHandler {
     @StreamListener(KafkaProcessor.INPUT)
     public void whenPaymentIdConfirmed_then_UPDATE_9(@Payload PaymentIdConfirmed paymentIdConfirmed) {
         try {
+            //System.out.println("\n\n##### listener PaymentIdConfirmed 111");
             if (!paymentIdConfirmed.validate()) return;
+            System.out.println("\n\n##### listener PaymentIdConfirmed : " + paymentIdConfirmed.toJson() + "\n\n");
+
                 // view 객체 조회
             Optional<SubsciptionView> subsciptionViewOptional = subsciptionViewRepository.findById(paymentIdConfirmed.getSubscriptionId());
+            
             if( subsciptionViewOptional.isPresent()) {
                 SubsciptionView subsciptionView = subsciptionViewOptional.get();
                 // view 객체에 이벤트의 eventDirectValue 를 set 함
-                    subsciptionView.setSubscriptionStatus(paymentIdConfirmed.getSubscriptionStatus());
+                // subsciptionView.setSubscriptionId(paymentIdConfirmed.getSubscriptionId());
+                subsciptionView.setPaymentId(paymentIdConfirmed.getPaymentId());
+                subsciptionView.setPaymentStatus("approvePayment");
+                subsciptionView.setSubscriptionStatus(paymentIdConfirmed.getSubscriptionStatus());
                 // view 레파지 토리에 save
                 subsciptionViewRepository.save(subsciptionView);
             }
