@@ -200,28 +200,31 @@
 
 # 구현:
 
-분석/설계 단계에서 도출된 헥사고날 아키텍처에 따라, 각 BC별로 대변되는 마이크로 서비스들을 스프링부트와 파이썬으로 구현하였다. 구현한 각 서비스를 로컬에서 실행하는 방법은 아래와 같다 (각자의 포트넘버는 8081 ~ 808n 이다)
+분석/설계 단계에서 도출된 헥사고날 아키텍처에 따라, 각 BC별로 대변되는 마이크로 서비스들을 스프링부트로 구현하였다. 구현한 각 서비스를 로컬에서 실행하는 방법은 아래와 같다 (각자의 포트넘버는 8081 ~ 808n 이다)
 
 ```
-cd claim
+cd gateway
 mvn spring-boot:run
 
-cd review
-mvn spring-boot:run 
+cd subscription
+mvn spring-boot:run
 
 cd payment
+mvn spring-boot:run 
+
+cd underwriting
 mvn spring-boot:run  
 
-cd history
-python policy-handler.py 
+cd mypage
+mvn spring-boot:run 
 ```
 
 ## DDD 의 적용
 
-- 각 서비스내에 도출된 핵심 Aggregate Root 객체를 Entity 로 선언하였다: (예시는 Claim 마이크로 서비스). 이때 가능한 현업에서 사용하는 언어 (유비쿼터스 랭귀지)를 그대로 사용하려고 노력했다.
+- 각 서비스내에 도출된 핵심 Aggregate Root 객체를 Entity 로 선언하였다: (예시는 subscription 마이크로 서비스). 이때 가능한 현업에서 사용하는 언어 (유비쿼터스 랭귀지)를 그대로 사용하려고 노력했다.
 
 ```
-package bomtada;
+package insurancecontract;
 
 import javax.persistence.*;
 import org.springframework.beans.BeanUtils;
@@ -229,87 +232,85 @@ import java.util.List;
 import java.util.Date;
 
 @Entity
-@Table(name="Claim_table")
-public class Claim {
+@Table(name="Subscription_table")
+public class Subscription {
 
     @Id
     @GeneratedValue(strategy=GenerationType.AUTO)
-    private Long id;
-    private Integer customerId;
-    private Integer price;
-    private String status;
-    private Date claimDt;
+    private Long subscriptionId;
+    private String subscriptionStatus;
+    private Long paymentId;
+    private Long underwritingId;
+    private String productName;
     
-    public Long getId() {
-        return id;
+    public Long getSubscriptionId() {
+        return subscriptionId;
     }
 
-    public void setId(Long id) {
-        this.id = id;
+    public void setSubscriptionId(Long subscriptionId) {
+        this.subscriptionId = subscriptionId;
     }
-    public Integer getCustomerId() {
-        return customerId;
-    }
-
-    public void setCustomerId(Integer customerId) {
-        this.customerId = customerId;
-    }
-    public Integer getPrice() {
-        return price;
+    public String getSubscriptionStatus() {
+        return subscriptionStatus;
     }
 
-    public void setPrice(Integer price) {
-        this.price = price;
+    public void setSubscriptionStatus(String subscriptionStatus) {
+        this.subscriptionStatus = subscriptionStatus;
     }
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-    public Date getClaimDt() {
-        return claimDt;
+    public Long getPaymentId() {
+        return paymentId;
     }
 
-    public void setClaimDt(Date claimDt) {
-        this.claimDt = claimDt;
+    public void setPaymentId(Long paymentId) {
+        this.paymentId = paymentId;
+    }
+    public Long getUnderwritingId() {
+        return underwritingId;
+    }
+
+    public void setUnderwritingId(Long underwritingId) {
+        this.underwritingId = underwritingId;
+    }
+    public String getProductName() {
+        return productName;
+    }
+
+    public void setProductName(String productName) {
+        this.productName = productName;
     }
 }
 ```
 - Entity Pattern 과 Repository Pattern 을 적용하여 JPA 를 통하여 다양한 데이터소스 유형 (RDB or NoSQL) 에 대한 별도의 처리가 없도록 데이터 접근 어댑터를 자동 생성하기 위하여 Spring Data REST 의 RestRepository 를 적용하였다
 ```
-package bomtada;
+package insurancecontract;
 
 import org.springframework.data.repository.PagingAndSortingRepository;
 import org.springframework.data.rest.core.annotation.RepositoryRestResource;
 
-@RepositoryRestResource(collectionResourceRel="claims", path="claims")
-public interface ClaimRepository extends PagingAndSortingRepository<Claim, Long>{
+@RepositoryRestResource(collectionResourceRel="subscriptions", path="subscriptions")
+public interface SubscriptionRepository extends PagingAndSortingRepository<Subscription, Long>{
+
 
 }
 ```
 - 적용 후 REST API 의 테스트
 ```
-# claim 서비스의 보험금청구 접수처리
-http POST http://localhost:8081/claims customerId=1 price=500 status="Received Claim" claimDt=1622635791863
+# subscription 서비스의 보험청약 접수처리
+http POST http://localhost:8088/subscriptions  subscriptionStatus="created" productName="Fisrtcancer"
 
-# review 서비스의 심사승인처리
-http PUT http://localhost:8082/reviews/1 claimId=1 examinerId=101 customerId=1 contId=80001 price=450 status="Approved Review" reviewDt=1622635799999
-
-# payment 서비스의 지급완료처리
-http PUT http://localhost:8083/payments/1 claimId=1 customerId=1 contId=80001 price=450 status="Completed Payment" paymentDt=1622639541714
+# underwriting 서비스의 심사승인처리
+http PATCH http://localhost:8088/underwritings/1  underwritingStatus="approveSubscription"  subscriptionId=1
 
 # 상태 확인
-http http://localhost:8081/claims/1
-http http://localhost:8082/reviews/1
-http http://localhost:8083/payments/1
+http http://localhost:8088/subscriptions/1
+http http://localhost:8088/payments/1
+http http://localhost:8088/underwritings/1
 ```
 
 
 ## 폴리글랏 프로그래밍 / 폴리글랏 퍼시스턴스
 
-이력관리 서비스(history)의 시나리오인 청구상태를 고객이 화면에서 확인 가능하도록 하는 기능의 구현 파트는 해당 팀이 python 을 이용하여 구현하기로 하였다. 해당 파이썬 구현체는 각 이벤트를 수신하여 처리하는 Kafka Consumer와 화면을 제공하는 Flask로 구현되었고, DB는 MySQL를 사용했다.
+청약 관리 서비스(mypage)의 시나리오인 청약진행상태를 고객이 확인 가능하도록 하는 기능의 구현 파트는 해당 팀이 DB를 mysql 을 이용하여 구현하기로 하였다. 
 ```
 # (history) Kafka Consumer
 
