@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mypage
+  namespace: insurancecontract
   labels:
     app: mypage
 spec:
@@ -16,7 +17,7 @@ spec:
     spec:
       containers:
         - name: mypage
-          image: username/mypage:latest
+          image: 095661863019.dkr.ecr.ap-northeast-2.amazonaws.com/mypage:v1
           ports:
             - containerPort: 8080
           readinessProbe:

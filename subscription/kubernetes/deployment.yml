@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: subscription
+  namespace: insurancecontract
   labels:
     app: subscription
 spec:
@@ -16,7 +17,7 @@ spec:
     spec:
       containers:
         - name: subscription
-          image: username/subscription:latest
+          image: 095661863019.dkr.ecr.ap-northeast-2.amazonaws.com/subscription:v1
           ports:
             - containerPort: 8080
           readinessProbe:
