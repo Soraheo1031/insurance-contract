@@ -41,6 +41,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: gateway
+  namespace: insurancecontract
   labels:
     app: gateway
 spec:
@@ -145,6 +146,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: payment
+  namespace: insurancecontract
   labels:
     app: payment
 spec:
@@ -197,6 +199,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: subscription
+  namespace: insurancecontract
   labels:
     app: subscription
 spec:
@@ -249,6 +252,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: underwriting
+  namespace: insurancecontract
   labels:
     app: underwriting
 spec:
