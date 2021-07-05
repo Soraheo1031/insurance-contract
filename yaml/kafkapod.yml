@@ -1,0 +1,14 @@
+apiVersion: "v1"
+kind: "Pod"
+metadata:
+  name: kafka-pod
+  namespace: insurancecontract
+  labels:
+    name: kafka-pod
+spec:
+  containers:
+    - name: kafka-pod
+      image: mesosphere/kafka-client
+      command:
+        - sleep
+        - "360000"
