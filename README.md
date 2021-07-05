@@ -232,7 +232,7 @@ mvn spring-boot:run
  
 - 실제로 view 페이지를 조회해 보면 모든 storage에 대한 전반적인 예약 상태, 결제 상태, 리뷰 건수 등의 정보를 종합적으로 알 수 있다
 ```
-   http GET localhost:8088/storageviews
+   http GET http://localhost:8088/subsciptionViews
 ```
 ![뷰](https://user-images.githubusercontent.com/84304043/122842865-227ac580-d339-11eb-906e-2873cd375b04.PNG)
 
@@ -364,268 +364,276 @@ mvn spring-boot:run
 
 아래의 구현 예제를 보면
 
-예약(Reservation)을 하면 동시에 연관된 창고(Storage), 결제(Payment) 등의 서비스의 상태가 적당하게 변경이 되고,
-예약건의 취소를 수행하면 다시 연관된 창고(Storage), 결제(Payment) 등의 서비스의 상태값 등의 데이터가 적당한 상태로 변경되는 것을
+청약(Subscription)을 하면 동시에 연관된 결제(Payment), 심사(Underwriting) 등의 서비스의 상태가 적당하게 변경이 되고,
+심사 거절이 수행하면 다시 연관된 결제(Payment) 등의 서비스의 상태값 등의 데이터가 적당한 상태로 변경되는 것을
 확인할 수 있습니다.
 
-- 창고등록
+- 청약신청
 ```
-http POST http://localhost:8088/storages description="BigStorage" price=200000 storageStatus="available"
+http POST http://localhost:8088/subscriptions  subscriptionStatus="created" productName="Fisrtcancer"
 ```  
 ![image](https://user-images.githubusercontent.com/84304043/122844125-eb59e380-d33b-11eb-9a85-1a892021ca0d.png)
-- 예약등록
+- 청약신청 후 - 청약 상태
 ```
-http POST localhost:8088/reservations storageId=1 price=200000 reservationStatus="reqReserve"
+http GET http://localhost:8088/subscriptions/1
 ```  
 ![image](https://user-images.githubusercontent.com/84304043/122843690-0415c980-d33b-11eb-9558-c423faa1bd42.png)
-- 예약 후 - 창고 상태
+- 청약신청 후 - 결제 상태
 ```
-http GET http://localhost:8088/storages/1
+http GET http://localhost:8088/payments/1
 ```  
 ![image](https://user-images.githubusercontent.com/84304043/122843724-1d1e7a80-d33b-11eb-8a52-8b7f772df2e3.png)
-- 예약 후 - 예약 상태
+- 청약신청 후 - 심사 상태
 ```
-http GET http://localhost:8088/reservations/1
+http GET http://localhost:8088/underwritings/1
 ```  
 ![image](https://user-images.githubusercontent.com/84304043/122843763-31fb0e00-d33b-11eb-83f6-140191ec1a6d.png)
-- 예약 후 - 결제 상태
+- 심사에서 청약 거절
 ```
-http GET http://localhost:8088/payments/1
+http PATCH http://localhost:8088/underwritings/1 underwritingStatus="refuseSubscription" subscriptionId=1
 ``` 
 ![image](https://user-images.githubusercontent.com/84304043/122843798-43441a80-d33b-11eb-92c4-160c77f6f3ef.png)
-- 예약 취소
+- 청약거절 후 - 심사 상태
 ```
-http PATCH localhost:8088/reservations/1 storageId=1 price=200000 reservationStatus="reqCancel"
-``` 
-![image](https://user-images.githubusercontent.com/84304043/122843840-57881780-d33b-11eb-88fe-61d8055ff1e0.png)
-- 예약 취소 후 - 창고 상태
-```
-http GET http://localhost:8088/storages/1
+http GET http://localhost:8088/underwritings/1
 ``` 
 ![image](https://user-images.githubusercontent.com/84304043/122843892-6ec70500-d33b-11eb-9663-e4c894dff60b.png)
-- 예약 취소 후 - 예약 상태
-```
-http GET http://localhost:8088/reservations/1
-``` 
-![image](https://user-images.githubusercontent.com/84304043/122843932-856d5c00-d33b-11eb-88a9-921c14d97ed0.png)
-- 예약 취소 후 - 결제 상태
+- 청약거절 후 - 결제 상태
 ```
 http GET http://localhost:8088/payments/1
 ``` 
-![image](https://user-images.githubusercontent.com/84304043/122843963-95853b80-d33b-11eb-8e0a-4831fa73a5b4.png)
+![image](https://user-images.githubusercontent.com/84304043/122843840-57881780-d33b-11eb-88fe-61d8055ff1e0.png)
+- 청약거절 후 - 청약 상태
+```
+http GET http://localhost:8088/subscriptions/1
+``` 
+![image](https://user-images.githubusercontent.com/84304043/122843932-856d5c00-d33b-11eb-88a9-921c14d97ed0.png)
 
 
 ## DDD 의 적용
 
-- 각 서비스내에 도출된 핵심 Aggregate Root 객체를 Entity 로 선언하였다. (예시는 storage 마이크로 서비스). 이때 가능한 현업에서 사용하는 언어 (유비쿼터스 랭귀지)를 그대로 사용하려고 노력했다. 현실에서 발생가능한 이벤트에 의하여 마이크로 서비스들이 상호 작용하기 좋은 모델링으로 구현을 하였다.
+- 각 서비스내에 도출된 핵심 Aggregate Root 객체를 Entity 로 선언하였다. (예시는 subscription 마이크로 서비스). 이때 가능한 현업에서 사용하는 언어 (유비쿼터스 랭귀지)를 그대로 사용하려고 노력했다. 현실에서 발생가능한 이벤트에 의하여 마이크로 서비스들이 상호 작용하기 좋은 모델링으로 구현을 하였다.
 
 ```
-package storagerent;
+package insurancecontract;
 
 import javax.persistence.*;
 import org.springframework.beans.BeanUtils;
+import java.util.List;
+import java.util.Date;
 
 @Entity
-@Table(name="Storage_table")
-public class Storage {
+@Table(name="Subscription_table")
+public class Subscription {
 
     @Id
     @GeneratedValue(strategy=GenerationType.AUTO)
-    private Long storageId;
-    private String storageStatus;
-    private String description;
-    private Long reviewCnt;
-    private String lastAction;
-    private Float price;
+    private Long subscriptionId;
+    private String subscriptionStatus;
+    private Long paymentId;
+    private Long underwritingId;
+    private String productName;
 
     @PostPersist
     public void onPostPersist(){
-        StorageRegistered storageRegistered = new StorageRegistered();
-        BeanUtils.copyProperties(this, storageRegistered);
-        storageRegistered.publishAfterCommit();
+        // SubscriptionCreated subscriptionCreated = new SubscriptionCreated();
+        // BeanUtils.copyProperties(this, subscriptionCreated);
+        // subscriptionCreated.publishAfterCommit();
+
+        //Following code causes dependency to external APIs
+        // it is NOT A GOOD PRACTICE. instead, Event-Policy mapping is recommended.
+        //----------------------------
+        // PAYMENT 결제 진행 (POST방식)
+        //----------------------------
+        insurancecontract.external.Payment payment = new insurancecontract.external.Payment();
+
+        payment.setSubscriptionId(this.getSubscriptionId());
+        //payment.setProductName(this.getProductName());
+        payment.setPaymentStatus("approvePayment");
+
+        // mappings goes here
+        SubscriptionApplication.applicationContext.getBean(insurancecontract.external.PaymentService.class)
+            .approvePayment(payment);
+
+        //----------------------------------
+        // 이벤트 발행 --> SubscriptionCreated
+        //----------------------------------
+        SubscriptionCreated subscriptionCreated = new SubscriptionCreated();
+        BeanUtils.copyProperties(this, subscriptionCreated);
+        subscriptionCreated.publishAfterCommit();
     }
 
     @PostUpdate
     public void onPostUpdate(){
-        if("modify".equals(lastAction) || "review".equals(lastAction)) {
-            StorageModified storageModified = new StorageModified();
-            BeanUtils.copyProperties(this, storageModified);
-            storageModified.publishAfterCommit();
+        
+        if("confirmCancel".equals(this.getSubscriptionStatus())) {
+            SubscriptionCancelled subscriptionCancelled = new SubscriptionCancelled();
+            BeanUtils.copyProperties(this, subscriptionCancelled);
+            subscriptionCancelled.publishAfterCommit();
         }
-        if("reserved".equals(lastAction)) {
-            StorageReserved storageReserved = new StorageReserved();
-            BeanUtils.copyProperties(this, storageReserved);
-            storageReserved.publishAfterCommit();
+
+        if("reqCancel".equals(this.getSubscriptionStatus())) {
+            CancelRequested cancelRequested = new CancelRequested();
+            BeanUtils.copyProperties(this, cancelRequested);
+            cancelRequested.publishAfterCommit();
         }
-        if("cancelled".equals(lastAction)) {
-            StorageCancelled storageCancelled = new StorageCancelled();
-            BeanUtils.copyProperties(this, storageCancelled);
-            storageCancelled.publishAfterCommit();
+
+        
+        if("confirmUnderwriterId".equals(this.getSubscriptionStatus())) {
+            UnderwriterIdConfirmed underwriterIdConfirmed = new UnderwriterIdConfirmed();
+            BeanUtils.copyProperties(this, underwriterIdConfirmed);
+            underwriterIdConfirmed.publishAfterCommit();
         }
+
+        
+        if("confirmPaymentId".equals(this.getSubscriptionStatus())) {
+            PaymentIdConfirmed paymentIdConfirmed = new PaymentIdConfirmed();
+            BeanUtils.copyProperties(this, paymentIdConfirmed);
+            paymentIdConfirmed.publishAfterCommit();
+        }
+
+        
+        if("confirmRefuse".equals(this.getSubscriptionStatus())) {
+            SubscriptionRefused subscriptionRefused = new SubscriptionRefused();
+            BeanUtils.copyProperties(this, subscriptionRefused);
+            subscriptionRefused.publishAfterCommit();
+        }
+
     }
 
-    @PreRemove
-    public void onPreRemove(){
-        StorageDeleted storageDeleted = new StorageDeleted();
-        BeanUtils.copyProperties(this, storageDeleted);
-        storageDeleted.publishAfterCommit();
+    @PrePersist
+    public void onPrePersist(){
     }
-    public Long getStorageId() {
-        return storageId;
+
+
+    public Long getSubscriptionId() {
+        return subscriptionId;
     }
-    public void setStorageId(Long storageId) {
-        this.storageId = storageId;
+
+    public void setSubscriptionId(Long subscriptionId) {
+        this.subscriptionId = subscriptionId;
     }
-    public String getStorageStatus() {
-        return storageStatus;
+    public String getSubscriptionStatus() {
+        return subscriptionStatus;
     }
-    public void setStorageStatus(String storageStatus) {
-        this.storageStatus = storageStatus;
+
+    public void setSubscriptionStatus(String subscriptionStatus) {
+        this.subscriptionStatus = subscriptionStatus;
     }
-    public String getDescription() {
-        return description;
+    public Long getPaymentId() {
+        return paymentId;
     }
-    public void setDescription(String description) {
-        this.description = description;
+
+    public void setPaymentId(Long paymentId) {
+        this.paymentId = paymentId;
     }
-    public Long getReviewCnt() {
-        return reviewCnt;
+    public Long getUnderwritingId() {
+        return underwritingId;
     }
-    public void setReviewCnt(Long reviewCnt) {
-        this.reviewCnt = reviewCnt;
+
+    public void setUnderwritingId(Long underwritingId) {
+        this.underwritingId = underwritingId;
     }
-    public String getLastAction() {
-        return lastAction;
+    public String getProductName() {
+        return productName;
     }
-    public void setLastAction(String lastAction) {
-        this.lastAction = lastAction;
-    }
-    public Float getPrice() {
-        return price;
-    }
-    public void setPrice(Float price) {
-        this.price = price;
+
+    public void setProductName(String productName) {
+        this.productName = productName;
     }
 }
-
 
 ```
 - Entity Pattern 과 Repository Pattern 을 적용하여 JPA 를 통하여 다양한 데이터소스 유형 (RDB or NoSQL) 에 대한 별도의 처리가 없도록 데이터 접근 어댑터를 자동 생성하기 위하여 Spring Data REST 의 RestRepository 를 적용하였다
 ```
-package storagerent;
+package insurancecontract;
 
 import org.springframework.data.repository.PagingAndSortingRepository;
 import org.springframework.data.rest.core.annotation.RepositoryRestResource;
 
-@RepositoryRestResource(collectionResourceRel="storages", path="storages")
-public interface StorageRepository extends PagingAndSortingRepository<Storage, Long>{
+@RepositoryRestResource(collectionResourceRel="subscriptions", path="subscriptions")
+public interface SubscriptionRepository extends PagingAndSortingRepository<Subscription, Long>{
 
 }
 ```
 - 적용 후 REST API 의 테스트
 ```
-# storage 서비스의 대여창고 등록
-http POST http://localhost:8088/storages description="storage1" price=200000 storageStatus="available"
+# subscription 서비스의 청약신청
+http POST http://localhost:8088/subscriptions  subscriptionStatus="created" productName="Fisrtcancer"
   
-# reservation 서비스의 창고 예약 요청
-http POST http:localhost:8088/reservations storageId=1 price=200000 reservationStatus="reqReserve"
+# underwriting 서비스의 심사승인 요청
+http PATCH http://localhost:8088/underwritings/1  underwritingStatus="approveSubscription"  subscriptionId=1
 
-# reservation 서비스의 예약 상태 확인
-http GET http://localhost:8088/reservations/1
+# payment 서비스의 결제 상태 확인
+http GET http://localhost:8088/payments/1
 
 ```
 
 ## 동기식 호출(Sync) 과 Fallback 처리
 
-분석 단계에서의 조건 중 하나로 예약 시 창고(storage) 간의 예약 가능 상태 확인 호출은 동기식 일관성을 유지하는 트랜잭션으로 처리하기로 하였다. 호출 프로토콜은 이미 앞서 Rest Repository 에 의해 노출되어있는 REST 서비스를 FeignClient 를 이용하여 호출하도록 한다. 또한 예약(reservation) -> 결제(payment) 서비스도 동기식으로 처리하기로 하였다.
+분석 단계에서의 조건 중 하나로 청약 신청시 결제가 바로 진행되도록 청약(subscription) -> 결제(payment) 서비스는 동기식 일관성을 유지하는 트랜잭션으로 처리하기로 하였다. 호출 프로토콜은 이미 앞서 Rest Repository 에 의해 노출되어있는 REST 서비스를 FeignClient 를 이용하여 호출하도록 한다. 
 
-- 창고, 결제 서비스를 호출하기 위하여 Stub과 (FeignClient) 를 이용하여 Service 대행 인터페이스 (Proxy) 를 구현 
+- 청약, 결제 서비스를 호출하기 위하여 Stub과 (FeignClient) 를 이용하여 Service 대행 인터페이스 (Proxy) 를 구현 
 
 ```
 # PaymentService.java
 
-package storagerent.external;
+package insurancecontract.external;
 
 <import문 생략>
 
 @FeignClient(name="payment", url="${prop.payment.url}")
 public interface PaymentService {
-    @RequestMapping(method= RequestMethod.POST, path="/payments")
+    @RequestMapping(method= RequestMethod.GET, path="/payments")
     public void approvePayment(@RequestBody Payment payment);
 }
 
-# StorageService.java
-
-package storagerent.external;
-
-<import문 생략>
-
-@FeignClient(name="Storage", url="${prop.storage.url}")
-public interface StorageService {
-
-    @RequestMapping(method=RequestMethod.GET, path="/check/chkAndReqReserve")
-    public boolean chkAndReqReserve(@RequestParam("storageId") long storageId);
-}
-
 ```
 
-- 예약 요청을 받은 직후(@PostPersist) 가능상태 확인 및 결제를 동기(Sync)로 요청하도록 처리
+- 청약신청 요청을 받은 직후(@PostPersist) 가능상태 확인 및 결제를 동기(Sync)로 요청하도록 처리
 ```
-# Reservation.java (Entity)
+# Subscription.java (Entity)
 
     @PostPersist
     public void onPostPersist(){
     
-        //------------------
-        // 예약이 들어온 경우
-        //------------------
+        //----------------------------
+        // PAYMENT 결제 진행 (POST방식)
+        //----------------------------
+        insurancecontract.external.Payment payment = new insurancecontract.external.Payment();
 
-        // 해당 Storage가 Available한 상태인지 체크
-       boolean result = ReservationApplication.applicationContext.getBean(storagerent.external.StorageService.class).chkAndReqReserve(this.getStorageId());
-        System.out.println("######## Storage Available Check Result : " + result);
-        
-        if(result) { 
+        payment.setSubscriptionId(this.getSubscriptionId());
+        //payment.setProductName(this.getProductName());
+        payment.setPaymentStatus("approvePayment");
 
-            // 예약 가능한 상태인 경우(Available)
+        // mappings goes here
+        SubscriptionApplication.applicationContext.getBean(insurancecontract.external.PaymentService.class)
+            .approvePayment(payment);
 
-            //----------------------------
-            // PAYMENT 결제 진행 (POST방식)
-            //----------------------------
-            storagerent.external.Payment payment = new storagerent.external.Payment();
-            payment.setReservationId(this.getReservationId());
-            payment.setStorageId(this.getStorageId());
-            payment.setPaymentStatus("paid");
-            payment.setPrice(this.price);
-            ReservationApplication.applicationContext.getBean(storagerent.external.PaymentService.class)
-                .approvePayment(payment);
-
-            //----------------------------------
-            // 이벤트 발행 --> ReservationCreated
-            //----------------------------------
-            ReservationCreated reservationCreated = new ReservationCreated();
-            BeanUtils.copyProperties(this, reservationCreated);
-            reservationCreated.publishAfterCommit();
+        //----------------------------------
+        // 이벤트 발행 --> SubscriptionCreated
+        //----------------------------------
+        SubscriptionCreated subscriptionCreated = new SubscriptionCreated();
+        BeanUtils.copyProperties(this, subscriptionCreated);
+        subscriptionCreated.publishAfterCommit();
         }
     }
 ```
 
-- 동기식 호출에서는 호출 시간에 따른 타임 커플링이 발생하며, 결제 시스템이 장애가 나면 주문도 못받는다는 것을 확인:
+- 동기식 호출에서는 호출 시간에 따른 타임 커플링이 발생하며, 결제 시스템이 장애가 나면 청약신청도 못받는다는 것을 확인:
 
 
 ```
-# 결제 (pay) 서비스를 잠시 내려놓음 (ctrl+c)
+# 결제 (payment) 서비스를 잠시 내려놓음 (ctrl+c)
 
-# 대여창고 등록
-http POST http://localhost:8088/storages description="storage1" price=200000 storageStatus="available"
+# Payment 서비스 종료 후 청약신청
+http POST http://localhost:8088/subscriptions  subscriptionStatus="created" productName="Fisrtcancer"
 
-# Payment 서비스 종료 후 창고대여
-http POST localhost:8088/reservations storageId=1 price=200000 reservationStatus="reqReserve"
+# Payment 서비스 실행 후 청약신청
+http POST http://localhost:8088/subscriptions  subscriptionStatus="created" productName="Fisrtcancer"
 
-# Payment 서비스 실행 후 창고대여
-http POST localhost:8088/reservations storageId=1 price=200000 reservationStatus="reqReserve"
-
-# 창고대여 확인 
-http GET http://localhost:8088/reservations/1  
+# 청약신청 확인 
+http GET http://localhost:8088/subscription/1  
 ```
 
 - 또한 과도한 요청시에 서비스 장애가 도미노 처럼 벌어질 수 있다. (서킷브레이커, 폴백 처리는 운영단계에서 설명한다.)
