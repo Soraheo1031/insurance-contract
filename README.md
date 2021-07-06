@@ -218,6 +218,9 @@ mvn spring-boot:run
 
 ## CQRS
 
+커맨드 (Create - Insert, Update, Delete : 데이터를 변경) 와 쿼리 (Select - Read : 데이터를 조회)의 책임을 분리한다. 
+각각의 서비스에서 발생하는 CUD는 서비스 내에서 처리하며, Read는 이벤트 소싱을 통해 mypage(subscriptionView) 서비스에서 확인 할 수 있다.
+
 청약(subscription) 의 청약신청, 결제여부, 심사확인 등 Status 에 대하여 고객(Customer)이 조회 할 수 있도록 CQRS 로 구현하였다.
 - subscription, payment, underwriting 개별 Aggregate Status 를 통합 조회하여 성능 Issue 를 사전에 예방할 수 있다.
 - 비동기식으로 처리되어 발행된 이벤트 기반 Kafka 를 통해 수신/처리 되어 별도 Table 에 관리한다
@@ -239,6 +242,8 @@ mvn spring-boot:run
 
 
 ## API 게이트웨이
+   Gateway를 통해 마이크로 서비스들의 진입점을 통일하였다. 
+  
       1. gateway 스프링부트 App을 추가 후 application.yaml내에 각 마이크로 서비스의 routes 를 추가하고 gateway 서버의 포트를 8080 으로 설정함
 
 
@@ -360,8 +365,10 @@ mvn spring-boot:run
 
 # Correlation
 
-창고대여 프로젝트에서는 PolicyHandler에서 처리 시 어떤 건에 대한 처리인지를 구별하기 위한 Correlation-key 구현을 
-이벤트 클래스 안의 변수로 전달받아 서비스간 연관된 처리를 정확하게 구현하고 있습니다. 
+서비스를 이용해 만들어진 각 이벤트 건은 Correlation-key 연결을 통해 식별이 가능합니다.
+
+Correlation-key로 식별하여 '청약신청됨' 이벤트를 통해 생성된 '결제' 건에 대해 '심사거절' 시 동일한 Correlation-key를 가지는 청약 신청 건이 취소되는 모습을 확인한다.
+진행상태보기 화면에서 Correlation-key인 subscriptionId로 조회
 
 아래의 구현 예제를 보면
 
@@ -646,15 +653,13 @@ http GET http://gateway:8080/subscriptions/1
 
 ## 비동기식 호출 / 시간적 디커플링 / 장애격리 / 최종 (Eventual) 일관성 테스트
 
+결제가 이루어진 후에 청약(subscription) 시스템의 상태가 업데이트가 되고, 심사(underwriting) 시스템과의 통신 행위는 비동기식으로 처리한다. 
+ - 이를 위하여 결제가 승인되면 결제가 승인 되었다는 이벤트를 카프카로 송출한다. (publish)
 
-결제가 이루어진 후에 숙소 시스템의 상태가 업데이트 되고, 예약 시스템의 상태가 업데이트 되며, 예약 및 취소 메시지가 전송되는 시스템과의 통신 행위는 비동기식으로 처리한다.
- 
-- 이를 위하여 결제가 승인되면 결제가 승인 되었다는 이벤트를 카프카로 송출한다. (Publish)
- 
 ```
 # Payment.java
 
-package storagerent;
+package insurancecontract;
 
 import javax.persistence.*;
 import org.springframework.beans.BeanUtils;
@@ -684,55 +689,60 @@ public class Payment {
 - 예약 시스템에서는 결제 승인 이벤트에 대해서 이를 수신하여 자신의 정책을 처리하도록 PolicyHandler 를 구현한다:
 
 ```
-# Reservation.java
+# Subscription.java
 
-package storagerent;
+package insurancecontract;
 
-    @PostUpdate
-    public void onPostUpdate(){
+@Service
+public class PolicyHandler{
     
-        ....
+     @StreamListener(KafkaProcessor.INPUT)
+     public void wheneverPaymentApproved_ConfirmPaymentId(@Payload PaymentApproved paymentApproved){
 
-        if("reserved".equals(this.getReservationStatus())) {
+        if(!paymentApproved.validate()) return;
 
-            ////////////////////
-            // 예약 확정된 경우
-            ////////////////////
+        System.out.println("\n\n##### listener ConfirmPaymentId : " + paymentApproved.toJson() + "\n\n");
 
-            // 이벤트 발생 --> ReservationConfirmed
-            ReservationConfirmed reservationConfirmed = new ReservationConfirmed();
-            BeanUtils.copyProperties(this, reservationConfirmed);
-            reservationConfirmed.publishAfterCommit();
-        }
-        
-        ....
-        
+        long subscriptionId = paymentApproved.getSubscriptionId(); // 결제승인된 청약Id
+
+        Optional<Subscription> res = subscriptionRepository.findById(subscriptionId);
+        Subscription subscription = res.get();
+
+        subscription.setPaymentId(paymentApproved.getPaymentId()); // 결제완료
+        subscription.setSubscriptionStatus("confirmPaymentId"); // 결제완료 상태
+
+        // DB Update
+        subscriptionRepository.save(subscription);   
     }
 
+}
 ```
 
-그 외 메시지 서비스는 예약/결제와 완전히 분리되어있으며, 이벤트 수신에 따라 처리되기 때문에, 메시지 서비스가 유지보수로 인해 잠시 내려간 상태 라도 예약을 받는데 문제가 없다.
+그 외 메시지 서비스는 청약/결제와 완전히 분리되어있으며, 이벤트 수신에 따라 처리되기 때문에, 메시지 서비스가 유지보수로 인해 잠시 내려간 상태 라도 예약을 받는데 문제가 없다.
 
 ```
-# 메시지 서비스 (message) 를 잠시 내려놓음 (ctrl+c)
+# 심사(Underwriting) 서비스 를 잠시 내려놓음 (ctrl+c)
 
-# 대여창고 등록
-http POST http://localhost:8088/storages description="msg1" price=200000 storageStatus="available"
+# Underwriting 서비스 종료 후 청약신청
+http POST http://gateway:8080/subscriptions subscriptionStatus="created" productName="Fisrtcancer3"
 
-# Message 서비스 종료 후 창고대여
-http POST localhost:8088/reservations storageId=5 price=200000 reservationStatus="reqReserve"   
+# 청약신청 확인 ( Underwriting 서비스 종료로 underwritingId 셋팅 안되고, "confirmPaymentId" 상태임
+http GET http://gateway:8080/subscriptions
+![image](https://user-images.githubusercontent.com/84304043/124635181-1a3a9280-dec2-11eb-98ee-7467c7a74079.png)
 
-# Message 서비스와 상관없이 창고대여 성공여부 확인
-http GET http://localhost:8088/reservations/2
+# Underwriting 서비스 재기동하여 확인
+http GET http://gateway:8080/underwritings
+![image](https://user-images.githubusercontent.com/84304043/124635600-946b1700-dec2-11eb-8853-81c824057ee3.png)
+
 
 ```
 ## 폴리그랏 퍼시스턴스 적용
 ```
-Message Sevices : hsqldb사용
+Mypage Sevices : hsqldb사용
 ```
 ![image](https://user-images.githubusercontent.com/84304043/122845081-dda55d80-d33d-11eb-8d9f-a4e17735574e.png)
 ```
-Message이외  Sevices : h2db사용
+Mypage  Sevices : h2db사용
 ```
 ![image](https://user-images.githubusercontent.com/84304043/122845106-ed24a680-d33d-11eb-9124-aed5d9e7285b.png)
 
@@ -811,26 +821,28 @@ kubectl exec -it siege -c siege -n storagerent -- /bin/bash
 ### 오토스케일 아웃
 앞서 CB 는 시스템을 안정되게 운영할 수 있게 해줬지만 사용자의 요청을 100% 받아들여주지 못했기 때문에 이에 대한 보완책으로 자동화된 확장 기능을 적용하고자 한다. 
 
-- storage deployment.yml 파일에 resources 설정을 추가한다
+- subscription deployment.yml 파일에 resources 설정을 추가한다
 
-![image](https://user-images.githubusercontent.com/84304043/122850814-d6378180-d348-11eb-9cd2-eb0873f1c8d7.png)
+![image](https://user-images.githubusercontent.com/84304043/124625431-beb7d700-deb8-11eb-9127-bd510b9a47e1.png)
 
-- storage 서비스에 대한 replica 를 동적으로 늘려주도록 HPA 를 설정한다. 설정은 CPU 사용량이 50프로를 넘어서면 replica 를 10개까지 늘려준다. (X, 오류 발생)
+- subscription 서비스에 대한 replica 를 동적으로 늘려주도록 HPA 를 설정한다. 설정은 CPU 사용량이 20프로를 넘어서면 replica 를 3개까지 늘려준다. 
 ```
-kubectl autoscale deployment storage -n storagerent --cpu-percent=50 --min=1 --max=10
+kubectl autoscale deployment subscription -n insurancecontract --cpu-percent=20 --min=1 --max=3
 ```
 
-- 부하를 동시사용자 100명, 1분 동안 걸어준다.(X)
+- 부하를 동시사용자 20명, 40초 동안 걸어준다.
 ```
-siege -c100 -t60S -v --content-type "application/json" 'http://storage:8080/storages POST {"desc": "BigStorage"}'
+siege -c20 -t40S -v http GET http://gateway:8080/subscriptions
 ```
 - 오토스케일이 어떻게 되고 있는지 모니터링을 걸어둔다 (X)
 ```
-kubectl get deploy storage -w -n storagerent 
+kubectl get hpa -n insurancecontract -w
 ```
-- 어느정도 시간이 흐른 후 (약 30초) 스케일 아웃이 벌어지는 것을 확인할 수 있다:(X)
+- 어느정도 시간이 흐른 후 (약 30초) 스케일 아웃이 벌어지는 것을 확인할 수 있다
+![image](https://user-images.githubusercontent.com/84304043/124626095-587f8400-deb9-11eb-85f1-22374a745284.png)
 
-- siege 의 로그를 보아도 전체적인 성공률이 높아진 것을 확인 할 수 있다. (X)
+- siege 의 로그를 보아도 전체적인 성공률이 높아진 것을 확인 할 수 있다. 
+![image](https://user-images.githubusercontent.com/84304043/124626139-60d7bf00-deb9-11eb-96a0-eb52c3ca8619.png)
 
 
 ## 무정지 재배포
@@ -885,3 +897,9 @@ livenessProbe에 'cat /tmp/healthy'으로 검증하도록 함
 
 - kubectl describe pod storage -n storagerent 실행으로 확인(X)
 
+
+
+# ConfigMap 사용
+- 시스템별로 또는 운영중에 동적으로 변경 가능성이 있는 설정들을 ConfigMap을 사용하여 관리합니다.
+
+* configmap.yaml
