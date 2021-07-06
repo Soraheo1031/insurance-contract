@@ -20,6 +20,9 @@ spec:
           image: 095661863019.dkr.ecr.ap-northeast-2.amazonaws.com/subscription:v1
           ports:
             - containerPort: 8080
+          resources:
+            requests:
+              cpu: "200m"
           readinessProbe:
             httpGet:
               path: '/actuator/health'
