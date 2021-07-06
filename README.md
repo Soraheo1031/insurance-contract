@@ -900,6 +900,6 @@ livenessProbe에 'cat /tmp/healthy'으로 검증하도록 함
 
 
 # ConfigMap 사용
-- 시스템별로 또는 운영중에 동적으로 변경 가능성이 있는 설정들을 ConfigMap을 사용하여 관리합니다.
+ - 시스템별로 또는 운영중에 동적으로 변경 가능성이 있는 설정들을 ConfigMap을 사용하여 관리합니다.
 
 * configmap.yaml
