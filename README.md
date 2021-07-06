@@ -305,7 +305,7 @@ mvn spring-boot:run
 	    spec:
 	      containers:
 		- name: gateway
-		  image: 740569282574.dkr.ecr.ap-northeast-1.amazonaws.com/user02-gateway:v1
+		  image: 095661863019.dkr.ecr.ap-northeast-2.amazonaws.com/gateway:v1
 		  ports:
 		    - containerPort: 8080
             ```               
@@ -317,7 +317,7 @@ mvn spring-boot:run
             ```     
           - Kubernetes에 생성된 Deploy. 확인
             
-![image](https://user-images.githubusercontent.com/84304043/122843390-4d194e00-d33a-11eb-82b9-d156fce642d0.png)
+![image](https://user-images.githubusercontent.com/84304043/124580086-bc3e8880-de8a-11eb-8686-11625908cc5c.png)
 	    
             
       3. Kubernetes용 Service.yaml을 작성하고 Kubernetes에 Service/LoadBalancer을 생성하여 Gateway 엔드포인트를 확인함. 
@@ -328,7 +328,7 @@ mvn spring-boot:run
               kind: Service
               metadata:
                 name: gateway
-                namespace: storagerent
+                namespace: insurancecontract
                 labels:
                   app: gateway
               spec:
@@ -352,10 +352,10 @@ mvn spring-boot:run
            
             ```
             Service  및 엔드포인트 확인 
-            kubectl get svc -n storagerent           
+            kubectl get svc -n insurancecontract           
             ```                
 
-![image](https://user-images.githubusercontent.com/84304043/122770160-229aa700-d2e0-11eb-9f85-b6fcb8cabe0e.png)
+![image](https://user-images.githubusercontent.com/84304043/124580352-fc9e0680-de8a-11eb-8c0d-df7a6378cdb4.png)
 
 
 # Correlation
