@@ -234,7 +234,8 @@ mvn spring-boot:run
 ```
    http GET http://localhost:8088/subsciptionViews
 ```
-![뷰](https://user-images.githubusercontent.com/84304043/122842865-227ac580-d339-11eb-906e-2873cd375b04.PNG)
+![image](https://user-images.githubusercontent.com/84304043/124577392-2c97da80-de88-11eb-91b5-ca1f87f0bba3.png)
+
 
 
 ## API 게이트웨이
@@ -370,44 +371,46 @@ mvn spring-boot:run
 
 - 청약신청
 ```
-http POST http://localhost:8088/subscriptions  subscriptionStatus="created" productName="Fisrtcancer"
+http POST http://gateway:8080/subscriptions subscriptionStatus="created" productName="Fisrtcancer"
 ```  
-![image](https://user-images.githubusercontent.com/84304043/122844125-eb59e380-d33b-11eb-9a85-1a892021ca0d.png)
+![image](https://user-images.githubusercontent.com/84304043/124577809-94e6bc00-de88-11eb-8b08-79ca57ca7219.png)
 - 청약신청 후 - 청약 상태
 ```
-http GET http://localhost:8088/subscriptions/1
+http GET http://gateway:8080/subscriptions
 ```  
-![image](https://user-images.githubusercontent.com/84304043/122843690-0415c980-d33b-11eb-9558-c423faa1bd42.png)
+![image](https://user-images.githubusercontent.com/84304043/124578172-eee78180-de88-11eb-87ea-f7e25502da79.png)
+
 - 청약신청 후 - 결제 상태
 ```
-http GET http://localhost:8088/payments/1
+http GET http://gateway:8080/payments
 ```  
-![image](https://user-images.githubusercontent.com/84304043/122843724-1d1e7a80-d33b-11eb-8a52-8b7f772df2e3.png)
+![image](https://user-images.githubusercontent.com/84304043/124578498-3bcb5800-de89-11eb-9efc-64f1cd5f96f9.png)
 - 청약신청 후 - 심사 상태
 ```
-http GET http://localhost:8088/underwritings/1
+http GET http://gateway:8080/underwritings
 ```  
-![image](https://user-images.githubusercontent.com/84304043/122843763-31fb0e00-d33b-11eb-83f6-140191ec1a6d.png)
+![image](https://user-images.githubusercontent.com/84304043/124578615-5271af00-de89-11eb-961a-c76891eee024.png)
+
 - 심사에서 청약 거절
 ```
 http PATCH http://localhost:8088/underwritings/1 underwritingStatus="refuseSubscription" subscriptionId=1
 ``` 
-![image](https://user-images.githubusercontent.com/84304043/122843798-43441a80-d33b-11eb-92c4-160c77f6f3ef.png)
-- 청약거절 후 - 심사 상태
+![image](https://user-images.githubusercontent.com/84304043/124578902-9a90d180-de89-11eb-8499-dca7d90648ca.png)
+- 심사거절 후 - 심사 상태
 ```
-http GET http://localhost:8088/underwritings/1
+http GET http://gateway:8080/underwritings
 ``` 
-![image](https://user-images.githubusercontent.com/84304043/122843892-6ec70500-d33b-11eb-9663-e4c894dff60b.png)
-- 청약거절 후 - 결제 상태
+![image](https://user-images.githubusercontent.com/84304043/124579003-b4321900-de89-11eb-9a16-c5ec31742498.png)
+- 심사거절 후 - 결제 상태
 ```
-http GET http://localhost:8088/payments/1
+http GET http://gateway:8080/payments
 ``` 
-![image](https://user-images.githubusercontent.com/84304043/122843840-57881780-d33b-11eb-88fe-61d8055ff1e0.png)
-- 청약거절 후 - 청약 상태
+![image](https://user-images.githubusercontent.com/84304043/124579299-ee9bb600-de89-11eb-858c-7348d7760e29.png)
+- 심사거절 후 - 청약 상태
 ```
-http GET http://localhost:8088/subscriptions/1
+http GET http://gateway:8080/subscriptions
 ``` 
-![image](https://user-images.githubusercontent.com/84304043/122843932-856d5c00-d33b-11eb-88a9-921c14d97ed0.png)
+![image](https://user-images.githubusercontent.com/84304043/124579175-d7f55f00-de89-11eb-9f18-2b5710d89597.png)
 
 
 ## DDD 의 적용
@@ -559,13 +562,13 @@ public interface SubscriptionRepository extends PagingAndSortingRepository<Subsc
 - 적용 후 REST API 의 테스트
 ```
 # subscription 서비스의 청약신청
-http POST http://localhost:8088/subscriptions  subscriptionStatus="created" productName="Fisrtcancer"
+http POST http://gateway:8080/subscriptions subscriptionStatus="created" productName="Fisrtcancer"
   
 # underwriting 서비스의 심사승인 요청
-http PATCH http://localhost:8088/underwritings/1  underwritingStatus="approveSubscription"  subscriptionId=1
+http PATCH http://gateway:8080//underwritings/1  underwritingStatus="approveSubscription"  subscriptionId=1
 
 # payment 서비스의 결제 상태 확인
-http GET http://localhost:8088/payments/1
+http GET http://gateway:8080/payments/1
 
 ```
 
@@ -627,13 +630,13 @@ public interface PaymentService {
 # 결제 (payment) 서비스를 잠시 내려놓음 (ctrl+c)
 
 # Payment 서비스 종료 후 청약신청
-http POST http://localhost:8088/subscriptions  subscriptionStatus="created" productName="Fisrtcancer"
+http POST http://gateway:8080/subscriptions subscriptionStatus="created" productName="Fisrtcancer"
 
 # Payment 서비스 실행 후 청약신청
-http POST http://localhost:8088/subscriptions  subscriptionStatus="created" productName="Fisrtcancer"
+http POST http://gateway:8080/subscriptions subscriptionStatus="created" productName="Fisrtcancer"
 
 # 청약신청 확인 
-http GET http://localhost:8088/subscription/1  
+http GET http://gateway:8080/subscriptions/1  
 ```
 
 - 또한 과도한 요청시에 서비스 장애가 도미노 처럼 벌어질 수 있다. (서킷브레이커, 폴백 처리는 운영단계에서 설명한다.)
