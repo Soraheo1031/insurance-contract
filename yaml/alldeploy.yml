@@ -166,6 +166,12 @@ spec:
           resources:
             requests:
               cpu: "200m"
+          env:
+            - name: api.url.payment
+              valueFrom:
+                configMapKeyRef:
+                  name: insurancecontract-config
+                  key: api.url.payment
           readinessProbe:
             httpGet:
               path: '/actuator/health'
