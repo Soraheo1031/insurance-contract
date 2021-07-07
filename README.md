@@ -903,3 +903,57 @@ livenessProbe에 'cat /tmp/healthy'으로 검증하도록 함
  - 시스템별로 또는 운영중에 동적으로 변경 가능성이 있는 설정들을 ConfigMap을 사용하여 관리합니다.
 
 * configmap.yaml
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: insurancecontract-config
+  namespace: insurancecontract
+data:
+  api.url.payment: http://payment:8080
+```
+
+* subscription/kubernetes/deployment.yml (ConfigMap 사용)
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: subscription
+  namespace: insurancecontract
+  labels:
+    app: subscription
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: subscription
+  template:
+    metadata:
+      labels:
+        app: subscription
+    spec:
+      containers:
+        - name: subscription
+          image: 095661863019.dkr.ecr.ap-northeast-2.amazonaws.com/subscription:v1
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: "200m"
+          env:
+            - name: api.url.payment
+              valueFrom:
+                configMapKeyRef:
+                  name: insurancecontract-config
+                  key: api.url.payment
+```
+* configMap 설정된것 확인
+```
+kubectl get po -n insurancecontract
+```
+![image](https://user-images.githubusercontent.com/84304043/124712204-f74bc500-df39-11eb-88a8-7094d934246f.png)
+
+```
+kubectl describe pod/subscription-b9d7b9dc6-jwsjv -n insurancecontract
+```
+![image](https://user-images.githubusercontent.com/84304043/124712412-409c1480-df3a-11eb-8671-3ff4d8ced6c1.png)
