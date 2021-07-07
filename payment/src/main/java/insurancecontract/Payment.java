@@ -18,6 +18,11 @@ public class Payment {
     @PostPersist
     public void onPostPersist(){
         
+        ////////////////////////////
+        // 결제 승인 된 경우
+        ////////////////////////////
+
+        // 이벤트 발행 -> PaymentApproved
         PaymentApproved paymentApproved = new PaymentApproved();
         BeanUtils.copyProperties(this, paymentApproved);
         paymentApproved.publishAfterCommit();

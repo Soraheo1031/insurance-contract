@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: insurancecontract-config
+  namespace: insurancecontract
+data:
+  api.url.payment: http://gateway:8080
