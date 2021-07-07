@@ -21,7 +21,12 @@ public class Payment {
         ////////////////////////////
         // 결제 승인 된 경우
         ////////////////////////////
-
+        // circuit break 테스트를 위한 임의 부하 처리
+        try {
+            Thread.currentThread().sleep((long) (400 + (Math.random() * 220)));
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         // 이벤트 발행 -> PaymentApproved
         PaymentApproved paymentApproved = new PaymentApproved();
         BeanUtils.copyProperties(this, paymentApproved);
