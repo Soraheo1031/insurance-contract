@@ -4,4 +4,4 @@ metadata:
   name: insurancecontract-config
   namespace: insurancecontract
 data:
-  api.url.payment: http://gateway:8080
+  api.url.payment: http://payment:8080
