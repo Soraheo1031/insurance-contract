@@ -754,56 +754,45 @@ Mypage  Sevices : h2db사용
 
 ## CI/CD 설정
 
-각 구현체들은 각자의 source repository 에 구성되었고, 사용한 CI/CD는 buildspec.yml을 이용한 AWS codebuild를 사용하였습니다.
-
-- CodeBuild 프로젝트를 생성하고 AWS_ACCOUNT_ID, KUBE_URL, KUBE_TOKEN 환경 변수 세팅을 한다
-```
-SA 생성
-kubectl apply -f eks-admin-service-account.yml
-```
-![image](https://user-images.githubusercontent.com/84304043/122844500-c154f100-d33c-11eb-9ec0-5eb0fa3540d6.png)
-```
-Role 생성
-kubectl apply -f eks-admin-cluster-role-binding.yml
-```
-![image](https://user-images.githubusercontent.com/84304043/122844538-d6ca1b00-d33c-11eb-818b-5a51404265c1.png)
-```
-Token 확인
-kubectl -n kube-system get secret
-kubectl -n kube-system describe secret $(kubectl -n kube-system get secret | grep eks-admin | awk '{print $1}')
-```
-![image](https://user-images.githubusercontent.com/86210580/122849832-34fbfb80-d347-11eb-9f6d-b1e379b3e1cf.png)
+* 각 구현체들은 github의 source repository에 구성
+* Image repository는 ECR 사용
+* yaml파일 기반의 Code Deploy
 
 ```
-buildspec.yml 파일 
-마이크로 서비스 storage의 yml 파일 이용하도록 세팅
+# application deploy
+
+cd insurancecontract
+./xx.sh   // 각서비스의 deploy.yml 과 service.yaml 을 alldeploy.yml 하나로 합쳐줌
+
+cd insurancecontract/yaml
+
+kubectl apply -f configmap.yml
+kubectl apply -f alldeploy.yml
 ```
-![image](https://user-images.githubusercontent.com/84304043/122844673-201a6a80-d33d-11eb-8a52-a0fad02951d9.png)
-
-- codebuild 실행
-```
-codebuild 프로젝트 및 빌드 이력
-```
-![image](https://user-images.githubusercontent.com/84304043/122846416-bdc36900-d340-11eb-9558-cad08d2615f2.png)
-![image](https://user-images.githubusercontent.com/84304043/122861596-a2fdee00-d35a-11eb-9d73-7ff537c9e332.png)
-
-- codebuild 빌드 내역 (Message 서비스 세부)
-
-![image](https://user-images.githubusercontent.com/84304043/122846449-cd42b200-d340-11eb-8a33-aeff63915d61.png)
-
-- codebuild 빌드 내역 (전체 이력 조회)
-
-![image](https://user-images.githubusercontent.com/84304043/122846462-d5025680-d340-11eb-9914-b12b82a74ff5.png)
-
+![image](https://user-images.githubusercontent.com/84304043/124714129-56aad480-df3c-11eb-9912-dd2b7d1308f2.png)
 
 
 ## 동기식 호출 / 서킷 브레이킹 / 장애격리
 
-* 서킷 브레이킹: Hystrix 사용하여 구현함
-
-시나리오는 예약(reservation)--> 창고(storage) 시의 연결을 RESTful Request/Response 로 연동하여 구현이 되어있고, 예약 요청이 과도할 경우 CB 를 통하여 장애격리.
+* 서킷 브레이킹 프레임워크의 선택: Spring FeignClient + Hystrix 옵션을 사용하여 구현함
+시나리오는 청약(subscription)-->  결제(payment) 시의 연결을 RESTful Request/Response 로 연동하여 구현이 되어있고, 청약 요청이 과도할 경우 CB 를 통하여 장애격리.
 
 ![image](https://user-images.githubusercontent.com/84304043/122866912-b6618700-d363-11eb-8247-dae264aa6fdf.png)
+
+* Hystrix 를 설정: 요청처리 쓰레드에서 처리시간이 610 밀리가 넘어서기 시작하여 어느정도 유지되면 CB 회로가 닫히도록 (요청을 빠르게 실패처리, 차단) 설정
+
+```
+(subscription) application.yml
+feign:
+  hystrix:
+    enabled: true
+    
+hystrix:
+  command:
+    # 전역설정
+    default:
+      execution.isolation.thread.timeoutInMilliseconds: 610    
+```
 
 
 * 부하테스터 siege 툴을 통한 서킷 브레이커 동작 확인: siege 실행 하였으나 storagerent 부하가 생성되지 않음.
