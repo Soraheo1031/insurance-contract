@@ -723,24 +723,23 @@ public class PolicyHandler{
 
 # 심사(Underwriting) 서비스 를 잠시 내려놓음 (ctrl+c)
 
-# Underwriting 서비스 종료 후 청약신청
+* Underwriting 서비스 종료 후 청약신청
 ```
 http POST http://gateway:8080/subscriptions subscriptionStatus="created" productName="Fisrtcancer3"
 ```
-# 청약신청 확인 ( Underwriting 서비스 종료로 underwritingId 셋팅 안되고, "confirmPaymentId" 상태임
+* 청약신청 확인 ( Underwriting 서비스 종료로 underwritingId 셋팅 안되고, "confirmPaymentId" 상태임
 ```
 http GET http://gateway:8080/subscriptions
 ```
 ![image](https://user-images.githubusercontent.com/84304043/124635181-1a3a9280-dec2-11eb-98ee-7467c7a74079.png)
 
-# Underwriting 서비스 재기동하여 확인
+* Underwriting 서비스 재기동하여 확인
 ```
 http GET http://gateway:8080/underwritings
 ```
 ![image](https://user-images.githubusercontent.com/84304043/124635600-946b1700-dec2-11eb-8853-81c824057ee3.png)
 
 
-```
 ## 폴리그랏 퍼시스턴스 적용
 ```
 Mypage Sevices : hsqldb사용
