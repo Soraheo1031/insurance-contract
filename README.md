@@ -793,19 +793,41 @@ hystrix:
     default:
       execution.isolation.thread.timeoutInMilliseconds: 610    
 ```
-
-
-* 부하테스터 siege 툴을 통한 서킷 브레이커 동작 확인: siege 실행 하였으나 storagerent 부하가 생성되지 않음.
+* 피호출 서비스(결제:payment) 의 임의 부하 처리 - 400 밀리에서 증감 220 밀리 정도 왔다갔다 하게
+```
+(payment) Payment.java
+ .........
+    @PostPersist
+    public void onPostPersist(){
+        
+        // circuit break 테스트를 위한 임의 부하 처리
+        try {
+            Thread.currentThread().sleep((long) (400 + (Math.random() * 220)));
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        ////////////////////////////
+        // 결제 승인 된 경우
+        ////////////////////////////
+        // 이벤트 발행 -> PaymentApproved
+        PaymentApproved paymentApproved = new PaymentApproved();
+        BeanUtils.copyProperties(this, paymentApproved);
+        paymentApproved.publishAfterCommit();
+    }
+.........
 
 ```
-kubectl run siege --image=apexacme/siege-nginx -n storagerent
-kubectl exec -it siege -c siege -n storagerent -- /bin/bash
+
+* 부하테스터 siege 툴을 통한 서킷 브레이커 동작 확인:
+  - 동시사용자 100명
+  - 60초 동안 실시
 ```
-- Jmeter 로 부하 테스트 하였으나 실패건이 3%로 나오는것확인 -> 하지만 Jmeter 테스트와 연결해서 CB결과를 보여줘야할지 모르겠음.
+$ kubectl exec -it siege bin/bash -n insurancecontract![image](https://user-images.githubusercontent.com/84304043/124731729-75fe2d80-df4d-11eb-906e-f300c2fb9eea.png)
+$ siege -c100 -t60s --content-type "application/json" 'http://gateway:8080/subscriptions POST {"subscriptionStatus": "created", "productName": "Fisrtcancer"}'![image](https://user-images.githubusercontent.com/84304043/124731680-6b439880-df4d-11eb-996a-bb52324b7858.png)
+```
+![image](https://user-images.githubusercontent.com/84304043/124731749-7c8ca500-df4d-11eb-805b-129d86680587.png)
 
-![image](https://user-images.githubusercontent.com/84304043/122867174-10fae300-d364-11eb-8ab4-a2dbc6395f75.png)
-![image](https://user-images.githubusercontent.com/84304043/122867281-31c33880-d364-11eb-9854-587ebade3a5b.png)
-
+- 운영시스템은 죽지 않고 지속적으로 CB 에 의하여 적절히 회로가 열림과 닫힘이 벌어지면서 자원을 보호하고 있음을 보여줌. 하지만, 99.68% 가 성공하였고, 0.32%가 실패했다는 것은 고객 사용성에 있어 좋지 않기 때문에 Retry 설정과 동적 Scale out (replica의 자동적 추가,HPA) 을 통하여 시스템을 확장 해주는 후속처리가 필요함.
 
 ### 오토스케일 아웃
 앞서 CB 는 시스템을 안정되게 운영할 수 있게 해줬지만 사용자의 요청을 100% 받아들여주지 못했기 때문에 이에 대한 보완책으로 자동화된 확장 기능을 적용하고자 한다. 
