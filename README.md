@@ -750,7 +750,7 @@ Mypage  Sevices : h2db사용
 ![image](https://user-images.githubusercontent.com/84304043/122845106-ed24a680-d33d-11eb-9124-aed5d9e7285b.png)
 
 ## Maven 빌드시스템 라이브러리 추가( pom.xml 설정변경 H2DB → HSQLDB) 
-![image](https://user-images.githubusercontent.com/84304043/122845179-0fb6bf80-d33e-11eb-879a-1e6e8964ebb3.png)
+![image](https://user-images.githubusercontent.com/84304043/124871777-6d662f80-dfff-11eb-949c-acfaed71fef2.png)
 
 # 운영
 
