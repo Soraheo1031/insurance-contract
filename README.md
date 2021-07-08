@@ -741,13 +741,14 @@ http GET http://gateway:8080/underwritings
 
 ## 폴리그랏 퍼시스턴스 적용
 ```
+Subscription, Payment, Underwriting  Sevices : h2db사용
+```
+![image](https://user-images.githubusercontent.com/84304043/124874908-3f82ea00-e003-11eb-88ce-f2a9c833ed05.png)
+```
 Mypage Sevices : hsqldb사용
 ```
-![image](https://user-images.githubusercontent.com/84304043/122845081-dda55d80-d33d-11eb-8d9f-a4e17735574e.png)
-```
-Mypage  Sevices : h2db사용
-```
-![image](https://user-images.githubusercontent.com/84304043/122845106-ed24a680-d33d-11eb-9124-aed5d9e7285b.png)
+![image](https://user-images.githubusercontent.com/84304043/124874954-4c9fd900-e003-11eb-80b9-e07c2454695a.png)
+
 
 ## Maven 빌드시스템 라이브러리 추가( pom.xml 설정변경 H2DB → HSQLDB) 
 ![image](https://user-images.githubusercontent.com/84304043/124871777-6d662f80-dfff-11eb-949c-acfaed71fef2.png)
