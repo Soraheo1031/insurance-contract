@@ -152,7 +152,7 @@ public class SubsciptionViewViewHandler {
             if( subsciptionViewOptional.isPresent()) {
                 SubsciptionView subsciptionView = subsciptionViewOptional.get();
                 // view 객체에 이벤트의 eventDirectValue 를 set 함
-                    subsciptionView.setSubscriptionStatus(subscriptionRefused.getSubscriptionStatus());
+                    subsciptionView.setUnderwritingStatus(subscriptionRefused.getUnderwritingStatus());
                 // view 레파지 토리에 save
                 subsciptionViewRepository.save(subsciptionView);
             }
