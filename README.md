@@ -860,55 +860,63 @@ kubectl get hpa -n insurancecontract -w
 ## 무정지 재배포
 
 * 먼저 무정지 재배포가 100% 되는 것인지 확인하기 위해서 Autoscaler 이나 CB 설정을 제거함
-
 ```
-kubectl delete destinationrules dr-storage -n storagerent
-kubectl delete hpa storage -n storagerent
+ kubectl delete hpa subscription -n insurancecontract
 ```
 
-- seige 로 배포작업 직전에 워크로드를 모니터링 함(에러발생)
+- seige 로 배포작업 직전에 워크로드를 모니터링 함
 ```
-siege -c100 -t60S -r10 -v --content-type "application/json" 'http://storage:8080/storages POST {"desc": "BigStorage"}'
+siege -c1 -v -t60s --content-type "application/json" 'http://gateway:8080/subscriptions'
 ```
+![image](https://user-images.githubusercontent.com/84304043/124850618-eeabcb00-dfdb-11eb-8c3c-89745936f53c.png)
 
-- 새버전으로의 배포 시작(X)
+- 새버전으로의 배포 시작
 ```
-kubectl set image ...
+(subscription)
+kubectl apply -f kubernetes/deployment_na.yml
 ```
 
 - seige 의 화면으로 넘어가서 Availability 가 100% 미만으로 떨어졌는지 확인(X)
 
 ```
-siege -c100 -t60S -r10 -v --content-type "application/json" 'http://storage:8080/storages POST {"desc": "BigStorage"}'
+siege -c1 -v -t60s --content-type "application/json" 'http://gateway:8080/subscriptions'
+```
+![image](https://user-images.githubusercontent.com/84304043/124850639-fa978d00-dfdb-11eb-92ab-a4c83cc3b70f.png)
+
+
+- 배포기간중 Availability 가 평소 100%에서 89% 대로 떨어지는 것을 확인. 원인은 쿠버네티스가 성급하게 새로 올려진 서비스를 READY 상태로 인식하여 서비스 유입을 진행한 것이기 때문. 이를 막기위해 Readiness Probe 를 설정함
+
+```
+# deployment.yml 의 readiness probe 의 설정:
 ```
 
-- 배포기간중 Availability 가 평소 100%에서 87% 대로 떨어지는 것을 확인. 원인은 쿠버네티스가 성급하게 새로 올려진 서비스를 READY 상태로 인식하여 서비스 유입을 진행한 것이기 때문. 이를 막기위해 Readiness Probe 를 설정함
-
-```
-# deployment.yaml 의 readiness probe 의 설정:
-```
-
-![image](https://user-images.githubusercontent.com/84304043/122858339-156bcf80-d355-11eb-9d1a-91da438ac905.png)
-
+![image](https://user-images.githubusercontent.com/84304043/124850744-2adf2b80-dfdc-11eb-9255-b3c0d7ae0c54.png)
 
 ```
 kubectl apply -f kubernetes/deployment.yml
 ```
 
-- 동일한 시나리오로 재배포 한 후 Availability 확인(X)
+- 동일한 시나리오로 재배포 한 후 Availability 확인
+![image](https://user-images.githubusercontent.com/84304043/124850821-4fd39e80-dfdc-11eb-8db1-690edb3bb950.png)
 
 
 # Self-healing (Liveness Probe)
-- storage deployment.yml 파일 수정 
+- subscription deployment_tmp.yml 파일 수행
+![image](https://user-images.githubusercontent.com/84304043/124867191-93d49c80-dff8-11eb-8af6-85ab011956e5.png)
+
 ```
 콘테이너 실행 후 /tmp/healthy 파일을 만들고 
 90초 후 삭제
 livenessProbe에 'cat /tmp/healthy'으로 검증하도록 함
 ```
-![image](https://user-images.githubusercontent.com/84304043/122863309-80210900-d35d-11eb-8e07-8113c4ca6af9.png)
+![image](https://user-images.githubusercontent.com/84304043/124867242-ab138a00-dff8-11eb-9873-2d8df3ee745e.png)
 
-- kubectl describe pod storage -n storagerent 실행으로 확인(X)
+- kubectl describe pod subscription -n insurancecontract 실행으로 확인
+![image](https://user-images.githubusercontent.com/84304043/124867261-b5ce1f00-dff8-11eb-8faf-1a190eba7455.png)
 
+- kubectl get po -n insurancecontract 실행으로 Restart 하고 있는 것을 확인함
+ 
+ ![image](https://user-images.githubusercontent.com/84304043/124867457-19f0e300-dff9-11eb-9b8c-7e4722de13e8.png)
 
 
 # ConfigMap 사용
