@@ -902,6 +902,7 @@ kubectl apply -f kubernetes/deployment.yml
 
 # Self-healing (Liveness Probe)
 - subscription deployment_tmp.yml 파일 수행
+
 ![image](https://user-images.githubusercontent.com/84304043/124867191-93d49c80-dff8-11eb-8af6-85ab011956e5.png)
 
 ```
@@ -915,8 +916,7 @@ livenessProbe에 'cat /tmp/healthy'으로 검증하도록 함
 ![image](https://user-images.githubusercontent.com/84304043/124867261-b5ce1f00-dff8-11eb-8faf-1a190eba7455.png)
 
 - kubectl get po -n insurancecontract 실행으로 Restart 하고 있는 것을 확인함
- 
- ![image](https://user-images.githubusercontent.com/84304043/124867457-19f0e300-dff9-11eb-9b8c-7e4722de13e8.png)
+![image](https://user-images.githubusercontent.com/84304043/124867457-19f0e300-dff9-11eb-9b8c-7e4722de13e8.png)
 
 
 # ConfigMap 사용
