@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: subscription
+  namespace: insurancecontract
+  labels:
+    app: subscription
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: subscription
+  template:
+    metadata:
+      labels:
+        app: subscription
+    spec:
+      containers:
+        - name: subscription
+          image: 095661863019.dkr.ecr.ap-northeast-2.amazonaws.com/subscription:v1
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: "200m"
+          env:
+            - name: api.url.payment
+              valueFrom:
+                configMapKeyRef:
+                  name: insurancecontract-config
+                  key: api.url.payment
+          readinessProbe:
+            httpGet:
+              path: '/actuator/health'
+              port: 8080
+            initialDelaySeconds: 10
+            timeoutSeconds: 2
+            periodSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: '/actuator/health'
+              port: 8080
+            initialDelaySeconds: 120
+            timeoutSeconds: 2
+            periodSeconds: 5
+            failureThreshold: 5
