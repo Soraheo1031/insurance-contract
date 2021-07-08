@@ -897,8 +897,8 @@ kubectl apply -f kubernetes/deployment.yml
 ```
 
 - 동일한 시나리오로 재배포 한 후 Availability 확인
-![image](https://user-images.githubusercontent.com/84304043/124850821-4fd39e80-dfdc-11eb-8db1-690edb3bb950.png)
 
+![image](https://user-images.githubusercontent.com/84304043/124850821-4fd39e80-dfdc-11eb-8db1-690edb3bb950.png)
 
 # Self-healing (Liveness Probe)
 - subscription deployment_tmp.yml 파일 수행
